@@ -52,8 +52,12 @@ WGI_DB_ID = 3
 # Rate Limiting (Sekunden zwischen Calls)
 WGI_API_DELAY = 0.3
 
+# Project root, resolved from this module (src/data_aquisition/wgi/download.py):
+#   4 × .parent → project root
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 # Output
-WGI_DIR = Path("data") / "raw" / "wgi"
+WGI_DIR = _PROJECT_ROOT / "data" / "raw" / "wgi"
 WGI_FILENAME = "wgi_raw.csv"
 
 DEFAULT_COUNTRIES = ["DEU", "DNK", "HUN", "ROU"]

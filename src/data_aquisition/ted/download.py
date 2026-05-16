@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------
+# Project root, resolved from this module (src/data_aquisition/ted/download.py):
+#   4 × .parent → project root
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 TED_URLS: dict[int, str] = {
     2014: "https://data.europa.eu/api/hub/store/data/ted-contract-award-notices-2014.zip",
     2015: "https://data.europa.eu/api/hub/store/data/ted-contract-award-notices-2015.zip",
@@ -35,7 +39,7 @@ TED_URLS: dict[int, str] = {
     2023: "https://data.europa.eu/api/hub/store/data/ted-contract-award-notices-2023.zip",
 }
 
-TED_DIR = Path("data") / "raw" / "ted"
+TED_DIR = _PROJECT_ROOT / "data" / "raw" / "ted"
 TED_TIMEOUT = 120
 DOWNLOAD_DELAY = 1.5
 
