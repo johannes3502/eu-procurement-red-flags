@@ -41,12 +41,22 @@ red-flags-procurement-governance/
 │   │   ├── cpi/                # CPI-Daten-Acquisition
 │   │   └── wgi/                # WGI-Daten-Acquisition
 │   ├── data_processing/        # Transformations-Module
-│   │   └── lookup_countries.csv # ISO-Länder-Mapping (Alpha-2: DK, DE, RO, HU)
+│   │   ├── lookup_countries.csv # ISO-Länder-Mapping (Alpha-2: DK, DE, RO, HU)
+│   │   ├── profiling_utils.py  # 📊 Generic Data Profiling Utilities (8 Kategorien)
+│   │   └── profile_raw_data.py # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
 │   ├── dw/                     # Data Warehouse Layer (Sternschema)
 │   ├── log/                    # Logging-Modul
 │   │   ├── __init__.py
 │   │   └── logger.py           # Zentrale Logging-Konfiguration
 │   └── utils/                  # Hilfsfunktionen
+├── doc/
+│   ├── project.md              # Projektkonzept
+│   ├── doc.md                  # Technische Dokumentation (dieses Doc)
+│   ├── profiling/              # 📊 Auto-generierte Data Profiling Reports
+│   │   ├── profile_cpi_*.md
+│   │   ├── profile_wgi_*.md
+│   │   └── profile_ted_*_*.md
+│   └── profiling_script_plan.md # Planungsdokument für das Profiling-Script
 ├── data/
 │   ├── raw/                    # Rohdaten (unverarbeitet)
 │   │   ├── ted/                # ted_<YYYY>.csv (2014–2023)
@@ -859,14 +869,96 @@ airflow dags trigger red_flags_pipeline
 
 ---
 
-## 12. Erweiterungspunkte (Roadmap)
+## 12. Data Profiling (automatisierte Datenqualitätsanalyse)
+
+### 12.1 Überblick
+
+Das Data-Profiling-System scannt alle Rohdaten (CPI, WGI, TED 2014–2023) und erzeugt
+umfassende Markdown-Qualitätsreports in `doc/profiling/`. Es ist modular aufgebaut:
+
+| Modul | Aufgabe | Abhängigkeiten |
+|-------|---------|----------------|
+| [`profiling_utils.py`](src/data_processing/profiling_utils.py) | 8 generische Profiling-Funktionen (kein Quellbezug) | pandas, numpy |
+| [`profile_raw_data.py`](src/data_processing/profile_raw_data.py) | Quellspezifische Logik + Orchestrierung | pandas, numpy, `profiling_utils`, `setup_logger` |
+
+### 12.2 Ausführung
+
+```bash
+python src/data_processing/profile_raw_data.py
+```
+
+### 12.3 Die 8 Profiling-Kategorien
+
+| # | Kategorie | Funktion (in `profiling_utils.py`) | Beschreibung |
+|---|-----------|-----------------------------------|-------------|
+| 1 | **Basic Info** | `compute_basic_info()` | Zeilenanzahl, Spaltenanzahl, Speicher in MB |
+| 2 | **Datentypen** | `compute_dtype_report()` | pandas-Typen pro Spalte, Speicher in Bytes |
+| 3 | **Fehlende Werte** | `compute_missing_values()` | Anzahl/Anteil Nulls pro Spalte, Gesamt-Null-Rate |
+| 4 | **Duplikate** | `compute_duplicates()` | Duplikat-Anzahl basierend auf konfigurierbaren Schlüsseln (z. B. `[iso3, year]` für CPI) |
+| 5 | **Ausreißer** | `compute_outliers()` | IQR-Methode (`Q1 - 1.5*IQR` / `Q3 + 1.5*IQR`), nur für numerische Spalten |
+| 6 | **Wertebereiche** | `compute_value_ranges()` | Min, Max, Mean, Median, Std, Unique-Count, Nulls |
+| 7 | **Text-Qualität** | `compute_text_quality()` | Minimale, maximale, durchschnittliche Textlänge, Whitespace-Rate |
+| 8 | **Logische Konsistenz** | (quellspezifisch in `profile_raw_data.py`) | Quellspezifische Plausibilitätsregeln (z. B. `VALUE_EURO <= AWARD_VALUE_EURO`) |
+
+### 12.4 Quellspezifische Konfiguration
+
+**CPI:**
+- Numerische Spalten: `score`, `rank`, `sources`, `standardError`, `lowerCi`, `upperCi`
+- Text-Spalten: `country`, `iso3`, `region`
+- Duplikat-Schlüssel: `[iso3, year]`
+
+**WGI:**
+- Numerische Spalten: `control_of_corruption`, `government_effectiveness`, `political_stability`, `rule_of_law`, `regulatory_quality`, `voice_accountability`
+- Duplikat-Schlüssel: `[country_iso3, year]`
+
+**TED:**
+- Numerische Spalten: `NUMBER_OFFERS`, `AWARD_VALUE_EURO`, `VALUE_EURO`
+- Text-Spalten: `WIN_COUNTRY_CODE`, `TOP_TYPE`, `CPV`, `B_ACCELERATED`, `B_AWARDED_TO_A_GROUP`
+- Duplikat-Schlüssel: `[ID_NOTICE_CAN, ID_LOT]`
+- Konsistenzregeln:
+  - `VALUE_EURO <= AWARD_VALUE_EURO` (geschätzter Wert ≤ Zuschlagswert)
+  - `NUMBER_OFFERS >= 1` (mindestens ein Bieter)
+  - `B_ACCELERATED == 'Y'` (Anzahl beschleunigter Verfahren, rein informativ)
+
+### 12.5 Output
+
+Alle Reports werden im [`doc/profiling/`](doc/profiling/)-Verzeichnis abgelegt, benannt nach dem Muster:
+- `profile_cpi_<DATUM>.md`
+- `profile_wgi_<DATUM>.md`
+- `profile_ted_<YYYY>_<DATUM>.md`
+
+**Beispiel-Erkenntnisse aus laufenden Reports:**
+| Quelle | Zeilen | Spalten | Bemerkung |
+|--------|--------|---------|-----------|
+| CPI | 2.494 | 10 | Keine Nulls, keine Duplikate; `standardError` zeigt 5,45% Ausreißer |
+| WGI | 42 | 8 | Vollständig (4 Länder × 10 Jahre) |
+| TED 2016 | 556.084 | 75 | `VALUE_EURO <= AWARD_VALUE_EURO` in ~73% verletzt |
+
+### 12.6 Fehlerbehandlung
+
+- Fehlende TED-Jahresdateien werden übersprungen (Log-Warnung)
+- `dtype_backend="numpy_nullable"` in `pd.read_csv()` kann bei komplett leeren
+  Spalten (z. B. `B_ACCELERATED` in TED 2014) zu `pd.StringDtype()` führen – die
+  Text-Qualitätsfunktion behandelt `pd.NA`-Längen explizit mit `.dropna()`.
+- Leere DataFrames werden mit 0-Werten statt Division-durch-Null behandelt.
+
+### 12.7 Anwendungsfälle
+
+1. **Datenqualitäts-Audit** vor der ETL-Pipeline – welche Spalten haben hohe Null-Raten?
+2. **Schema-Änderungen erkennen** – hat sich die Spaltenanzahl zwischen Jahren geändert?
+3. **Ausreißer-Identifikation** – welche Werte weichen extrem ab?
+4. **Dokumentation** – die Reports dienen als automatisch generierte Datenkatalog-Dokumentation
+
+---
+
+## 13. Erweiterungspunkte (Roadmap)
 
 1. **Exasol-Migration**: CSV → echte Datenbankverbindung
 2. **Airflow-Automatisierung**: Tägliche/wöchentliche Läufe
 3. **ML-Basierte Anomalieerkennung**: Clustering von Red-Flag-Mustern
 4. **Dashboard**: Tableau/PowerBI für Live-Analysen
 5. **API-Layer**: REST-API für externe Systeme
-6. **Datenqualität**: Automatisierte Checks, Data Profiling
+6. ~~**Datenqualität**: Automatisierte Checks, Data Profiling~~ ✅ **Umgesetzt**
 7. **Skalierung**: Spark/Hadoop für Multi-Jahrzehnte-Daten
 
 ---

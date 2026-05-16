@@ -145,9 +145,12 @@ red-flags-procurement-governance/
 ├── TECHNICAL.md                  # 🔧 Technische Dokumentation
 ├── exasol.md                     # Exasol-Datenbankdokumentation
 │
-├── create_presentation.py        # 🎨 Präsentationsgenerator (PowerPoint)
+├── src/download_data.py          # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
 ├── src/test_redflags.py          # ✅ Red-Flag-Analyse & Tests
-├── flag7_10_analyse.py           # 🔬 Spezifische Analyse (Flags 7 & 10)
+├── src/data_processing/          # 🔄 Transformations-Module
+│   ├── lookup_countries.csv      # ISO-Länder-Mapping
+│   ├── profiling_utils.py        # 📊 Generic Data Profiling Utilities
+│   └── profile_raw_data.py       # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
 │
 ├── src/                          # Quellcode-Architektur
 │   ├── data_aquisition/          # 📥 Datenquellen-Module
@@ -156,7 +159,9 @@ red-flags-procurement-governance/
 │   │   └── wgi/                  # WGI-Download & -Parsing
 │   │
 │   ├── data_processing/          # 🔄 Transformations-Module
-│   │   └── lookup_countries.csv  # ISO-Länder-Mapping
+│   │   ├── lookup_countries.csv  # ISO-Länder-Mapping
+│   │   ├── profiling_utils.py    # 📊 Generic Data Profiling Utilities
+│   │   └── profile_raw_data.py   # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
 │   │
 │   ├── dw/                       # 🏢 Data Warehouse (Sternschema)
 │   │   └── [Geplant: DDL, Loader, Views]
@@ -168,10 +173,19 @@ red-flags-procurement-governance/
 │   └── utils/                    # 🛠️ Hilfsfunktionen
 │       └── [Geplant: Utility-Module]
 │
+├── doc/                          # 📚 Dokumentation
+│   ├── doc.md                    # Technische Dokumentation
+│   ├── project.md                # Projektkonzept
+│   ├── profiling/                # 📊 Data Profiling Reports (auto-generiert)
+│   │   ├── profile_cpi_*.md      # CPI Profiling Report
+│   │   ├── profile_wgi_*.md      # WGI Profiling Report
+│   │   └── profile_ted_*_*.md    # TED Profiling Reports (pro Jahr)
+│   └── profiling_script_plan.md  # Planungsdokument für das Profiling-Script
+│
 ├── data/                         # 💾 Daten
 │   ├── raw/                      # Rohdaten (unverarbeitet)
 │   │   ├── ted/                  # TED-CSVs (pro Jahr)
-│   │   │   └── 2022.csv          # ✅ Beispiel-Datei
+│   │   │   └── ted_2022.csv      # ✅ Beispiel-Datei
 │   │   ├── cpi/                  # CPI-CSVs
 │   │   └── wgi/                  # WGI-CSVs
 │   │
@@ -219,6 +233,43 @@ python create_presentation.py
 ```
 
 **Output:** `presentation.pptx` (12 Folien mit Grafiken, Tabellen, Diagrammen)
+
+### Data Profiling – Automatisierte Datenqualitätsanalyse
+
+Extrahiert einen umfassenden **8‑Kategorien-Qualitätsreport** für alle Rohdaten (CPI, WGI, TED 2014–2023) als Markdown-Dateien:
+
+```bash
+python src/data_processing/profile_raw_data.py
+```
+
+**Output:** Markdown-Reports in [`doc/profiling/`](doc/profiling/):
+| Report | Beschreibung |
+|--------|-------------|
+| `profile_cpi_<DATUM>.md` | Profiling des Corruption Perceptions Index |
+| `profile_wgi_<DATUM>.md` | Profiling der Worldwide Governance Indicators |
+| `profile_ted_<YYYY>_<DATUM>.md` | Profiling eines TED-Jahres (2014–2023) |
+
+**Geprüfte Qualitätskategorien:**
+1. **Basic Info** – Zeilen, Spalten, Speicherverbrauch
+2. **Datentypen** – Spaltentypen & Speichereffizienz
+3. **Fehlende Werte** – Null-Raten pro Spalte
+4. **Duplikate** – Konfigurierbare Schlüsselspalten
+5. **Ausreißer** – IQR-basierte Erkennung in numerischen Spalten
+6. **Wertebereiche** – Min, Max, Mean, Median, Unique-Counts
+7. **Text-Qualität** – Längenanalyse für Textspalten
+8. **Logische Konsistenz** – Quellenspezifische Plausibilitätsregeln
+
+**Beispiel-Erkenntnisse aus dem Profiling:**
+- CPI: 2.494 Zeilen, 10 Spalten, keine fehlenden Werte, keine Duplikate
+- WGI: 42 Zeilen (4 Länder × 10 Jahre), vollständig
+- TED 2016: 556.084 Zeilen, 75 Spalten, ~1,9 GB RAM-Auslastung
+- TED: `VALUE_EURO <= AWARD_VALUE_EURO` wird in ~73% der Zeilen verletzt (interessantes Datenqualitätssignal)
+
+**Architektur:** Aufgeteilt in zwei Module:
+- [`profiling_utils.py`](src/data_processing/profiling_utils.py) – Generische, wiederverwendbare Profiling-Funktionen (8 Kategorien, kein Quellbezug)
+- [`profile_raw_data.py`](src/data_processing/profile_raw_data.py) – Quellspezifische Logik (Spaltendefinitionen, Konsistenzregeln) + Orchestrierung (`main()`)
+
+**Logging:** Alle Schritte werden via [`src/log/logger.py`](src/log/logger.py) in `logs/` und auf der Konsole protokolliert.
 
 ### Detaillierte Flag-Analyse
 
@@ -310,6 +361,7 @@ Nach der Pipeline-Verarbeitung entstehen:
 - Red-Flag-Berechnung (`src/test_redflags.py`)
 - Präsentationsgenerator (`create_presentation.py`)
 - Lookup-Tabelle (`src/data_processing/lookup_countries.csv`)
+- **Data Profiling** – Automatisierte Qualitätsanalyse aller Rohdaten ([`profiling_utils.py`](src/data_processing/profiling_utils.py) + [`profile_raw_data.py`](src/data_processing/profile_raw_data.py))
 
 🚧 **In Bearbeitung:**
 - Data Warehouse Schema (Sternschema-DDL)

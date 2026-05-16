@@ -151,14 +151,3 @@ Manuelle Eingriffe entfallen.
 - Keine Kausalität.  
 - „Tax Haven Winner“ praktisch irrelevant für EU‑Daten – bleibt nur aus Vollständigkeit erwähnt, aber nicht weiter analysiert.
 
----
-
-## 11. Nächste Schritte
-
-1. Präsentationsfolien erstellen.  
-2. Proof‑of‑Concept mit einem Jahr (z. B. 2022).  
-3. ISO‑Lookup‑Tabellen erstellen.  
-4. Sternschema in Exasol anlegen (inkl. Krisen‑Dimension).  
-5. Vollautomatisierte Pipeline für 2014–2023 implementieren.  
-6. Analyse der Red‑Flag‑Kombinationen (insb. die vier sinnvollen aus Abschnitt 6).
-
