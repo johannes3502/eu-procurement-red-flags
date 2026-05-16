@@ -31,6 +31,7 @@ red-flags-procurement-governance/
 ├── project.md                  # Projektkonzept & Anforderungen (bleibt unverändert)
 ├── README.md                   # Benutzerhandbuch (aktualisiert)
 ├── TECHNICAL.md                # Dieses Dokument
+├── src/download_data.py        # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
 ├── create_presentation.py      # Präsentationsgenerator (PowerPoint)
 ├── test_redflags.py            # Red-Flag-Analyse & Tests
 ├── flag7_10_analyse.py         # Spezifische Flags 7 & 10 Analyse
@@ -48,11 +49,13 @@ red-flags-procurement-governance/
 │   └── utils/                  # Hilfsfunktionen
 ├── data/
 │   ├── raw/                    # Rohdaten (unverarbeitet)
-│   │   ├── ted/2022.csv        # TED-Daten (Beispiel-Jahr)
-│   │   ├── cpi/                # CPI-Jahres-CSVs
-│   │   └── wgi/                # WGI-Jahres-CSVs
+│   │   ├── ted/                # ted_<YYYY>.csv (2014–2023)
+│   │   │   └── ted_2022.csv    # Beispiel-Datei
+│   │   ├── cpi/                # cpi_raw.csv
+│   │   └── wgi/                # wgi_raw.csv
 │   └── processed/              # Verarbeitete Daten (DWH-ready)
 ├── temp/                       # Temporäre Dateien, Zwischenergebnisse
+├── logs/                       # Anwendungs-Logs (inkl. download_data.log)
 └── tests/                      # Unit & Integration Tests
 ```
 
@@ -98,26 +101,31 @@ Alpha-3 (z. B. DEU) → Alpha-2 (z. B. DE) via lookup_countries.csv
 
 ### 2.3 WGI (Worldwide Governance Indicators)
 
-**URL:** https://databank.worldbank.org/source/worldwide-governance-indicators
-
-**Format:** CSV (Download über API oder manuell)  
-**Länderfeld:** `code` (numerisch, z. B. `276` für Deutschland)  
-**Zeitraum:** 1996–2023 (in diesem Projekt: 2014–2023)  
-**Granularität:** Jährlich  
-**Dimensionen:**
-- Rule of Law
-- Control of Corruption
-- Regulatory Quality
-- Voice and Accountability
-- Government Effectiveness
-- Political Stability
-
+**API Library:** `wbgapi` (World Bank API wrapper, `pip install wbgapi`)
+**Datenbank-ID:** `db=3`
+**Länderfeld:** ISO Alpha-3 (z. B. `DEU` für Deutschland)
+**Abgefragte Indikator-Codes:** `GOV_WGI_CC.EST`, `GOV_WGI_GE.EST`, `GOV_WGI_PV.EST`, `GOV_WGI_RL.EST`, `GOV_WGI_RQ.EST`, `GOV_WGI_VA.EST`
+**Zeitraum:** 1996–2023 (in diesem Projekt: 2014–2023)
+**Granularität:** Jährlich
 **Skala:** ca. -2,5 (schwach) bis +2,5 (stark)
 
-**Mapping-Transformation:**
-```
-Numerisch (z. B. 276) → Alpha-2 (z. B. DE) via lookup_countries.csv
-```
+**Dimensionen (nach Umbenennung):**
+- `control_of_corruption`
+- `government_effectiveness`
+- `political_stability`
+- `rule_of_law`
+- `regulatory_quality`
+- `voice_accountability`
+
+**Bereitgestelltes CSV-Format (flach, ohne weiteres Reshaping):**
+
+| country_iso3 | year | control_of_corruption | government_effectiveness | political_stability | rule_of_law | regulatory_quality | voice_accountability |
+|--------------|------|----------------------|--------------------------|---------------------|-------------|-------------------|---------------------|
+| DEU          | 2014 | 1.708                | 1.966                    | 0.921               | 1.624       | 1.561             | 1.367               |
+
+**Implementierung:** Die Download-Logik lebt im Modul [`src/data_aquisition/wgi/download.py`](src/data_aquisition/wgi/download.py). Ein einziger Aufruf von `wb.data.DataFrame()` mit `db=3` liefert alle sechs Indikatoren auf einmal. Das rohe MultiIndex-DataFrame wird via Stack + Pivot in das flache Format überführt.
+
+**CSV-Output-Spalten:** `country_iso3`, `year`, `control_of_corruption`, `government_effectiveness`, `political_stability`, `rule_of_law`, `regulatory_quality`, `voice_accountability`
 
 ### 2.4 Länder-Mapping (lookup_countries.csv)
 
@@ -325,57 +333,59 @@ WHERE dt.year BETWEEN 2014 AND 2023
 
 ### 5.1 Extract-Phase
 
-**Automatisierte Datenquellen-URLs:**
+Die Extraktion erfolgt vollautomatisch durch das Skript **`src/download_data.py`**
+im Unterverzeichnis `src/`. Es lädt alle drei Datenquellen herunter und legt sie in der
+vereinbarten Ordnerstruktur ab. Ausführung:
 
-```python
-# TED (jährliche Downloads)
-ted_urls = {
-    2022: "https://data.europa.eu/api/hub/search?..."  # Beispiel
-    2023: "https://data.europa.eu/api/hub/search?..."
-}
-
-# CPI (einmalig oder jährlich aktualisiert)
-cpi_url = "https://data.humdata.org/dataset/.../download/global-cpi-all.csv"
-
-# WGI (API-basiert)
-wgi_base_url = "https://databank.worldbank.org/data/..." 
+```bash
+python src/download_data.py            # inkrementell (überspringt vorhandene)
+python src/download_data.py --force    # vollständiger Neu-Download
 ```
 
-**Python-Implementierung (geplant: src/data_aquisition/):**
+Alle Schritte werden über den Projekt-Logger (`src/log/logger.py`) in
+`logs/download_data.log` und auf der Konsole protokolliert.
 
-```python
-# src/data_aquisition/ted/fetch_ted.py
-import requests
-import pandas as pd
+**Datenquellen-URLs & Ordner:**
 
-def fetch_ted_year(year):
-    """Fetch TED data für ein Jahr (gefiltert auf 4 Länder)"""
-    url = f"https://data.europa.eu/..."  # Anpassung erforderlich
-    response = requests.get(url)
-    df = pd.read_csv(url, encoding='utf-8', low_memory=False)
-    
-    # Filter auf 4 Länder
-    df = df[df['WIN_COUNTRY_CODE'].isin(['DE', 'DK', 'HU', 'RO'])]
-    
-    df.to_csv(f"data/raw/ted/{year}.csv", index=False)
-    print(f"TED {year}: {len(df)} Zeilen gespeichert")
-    return df
+| Quelle | Zielordner | URL / Library | Methode |
+|--------|-----------|---------------|---------|
+| **TED** | `data/raw/ted/ted_<YYYY>.csv` | `https://data.europa.eu/api/hub/store/data/ted-contract-award-notices-<YYYY>.zip` | ZIP-Download → CSV-Extraktion → ZIP-Löschung (2014–2023) |
+| **CPI** | `data/raw/cpi/cpi_raw.csv` | `https://data.humdata.org/dataset/fb4adde0-93d5-4ff9-befc-4a6916c1181b/resource/a6a4e225-50bb-4abf-958c-c37e3c3b380b/download/global-cpi-all.csv` | Direkter CSV-Download |
+| **WGI** | `data/raw/wgi/wgi_raw.csv` | `wbgapi` (Library), `db=3`, Indikator-Codes: `GOV_WGI_CC.EST`, `GOV_WGI_GE.EST`, `GOV_WGI_PV.EST`, `GOV_WGI_RL.EST`, `GOV_WGI_RQ.EST`, `GOV_WGI_VA.EST` | Ein API-Call via `wb.data.DataFrame()` → MultiIndex → Stack + Pivot → flaches CSV |
 
-# src/data_aquisition/cpi/fetch_cpi.py
-def fetch_cpi():
-    """Fetch globalen CPI, filter auf 4 Länder"""
-    url = "https://data.humdata.org/..."
-    df = pd.read_csv(url)
-    
-    # Mapping Alpha-3 → Alpha-2
-    iso3_to_iso2 = {'DEU': 'DE', 'DNK': 'DK', 'HUN': 'HU', 'ROU': 'RO'}
-    df['country_code'] = df['ISO3'].map(iso3_to_iso2)
-    df = df.dropna(subset=['country_code'])
-    
-    df.to_csv("data/raw/cpi/all_years.csv", index=False)
-    print(f"CPI: {len(df)} Zeilen gespeichert")
-    return df
-```
+**TED – ZIP-Download & Extraktion:**
+
+Das Skript verwendet eine feste Liste von ZIP-Download-URLs
+(`ted-contract-award-notices-<YYYY>.zip`). Für jedes Jahr wird:
+1. Die ZIP-Datei heruntergeladen (Timeout: 120 s)
+2. Die enthaltene CSV-Datei extrahiert (es wird eine CSV erwartet)
+3. Die CSV als `ted_<YYYY>.csv` in `data/raw/ted/` gespeichert
+4. Die ZIP-Datei verworfen (nur im Speicher gehalten, nicht auf Platte geschrieben)
+
+Bei Fehlern (Download, ZIP-Korruption, fehlende CSV) wird eine Warnung
+protokolliert und das Skript fährt mit dem nächsten Jahr fort.
+
+**TED – Datenfilterung:**
+
+Die TED-CSVs werden ungefiltert als Rohdaten abgelegt. Die Länderfilterung
+(DE, DK, HU, RO) und die Red-Flag-Berechnung finden erst in der Transform-Phase
+statt (siehe 5.2).
+
+**WGI – API-Abruf (wbgapi):**
+
+Das Modul [`src/data_aquisition/wgi/download.py`](src/data_aquisition/wgi/download.py)
+nutzt die Library `wbgapi` für einen einzigen API-Call. Mit `wb.data.DataFrame()` und
+dem Parameter `db=3` werden alle sechs WGI-Indikatoren gleichzeitig abgerufen. Der rohe
+MultiIndex-DataFrame wird via Stack + Pivot in ein flaches Format umgewandelt
+(Spalten: `country_iso3`, `year`, `control_of_corruption`, …). Anschließend filtert
+`src/download_data.py` ggf. auf die exakt gewünschten Jahre und speichert das Ergebnis als CSV.
+
+**Fehlerbehandlung & Retry-Logik:**
+
+- `requests.Session` mit `Retry`-Adapter (3 Versuche, exponentielles Backoff)
+- 1,5 s Wartezeit zwischen TED-Downloads (Fair-Use)
+- Fehlgeschlagene Downloads werden protokolliert, das Skript läuft weiter
+- Bereits existierende Dateien werden standardmäßig übersprungen
 
 ### 5.2 Transform-Phase
 
