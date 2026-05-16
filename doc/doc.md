@@ -33,7 +33,7 @@ red-flags-procurement-governance/
 ├── TECHNICAL.md                # Dieses Dokument
 ├── src/download_data.py        # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
 ├── create_presentation.py      # Präsentationsgenerator (PowerPoint)
-├── test_redflags.py            # Red-Flag-Analyse & Tests
+├── src/test_redflags.py        # Red-Flag-Analyse & Tests
 ├── flag7_10_analyse.py         # Spezifische Flags 7 & 10 Analyse
 ├── src/
 │   ├── data_aquisition/        # Datenquellen-Module (geplant/erweiterbar)
@@ -160,7 +160,7 @@ Denmark,DK
 | 7 | Tax Haven Winner | `WIN_COUNTRY_CODE IN (EU-Steueroasen-Liste)` | TED | Zeile | explorativ |
 | **8** | **High Lot Fragmentation** | `LOT_COUNT_PER_NOTICE > 5` | TED | Notice | **KERN** |
 
-### 3.2 Implementierung in Python (test_redflags.py)
+### 3.2 Implementierung in Python (src/test_redflags.py)
 
 ```python
 import pandas as pd
@@ -784,7 +784,7 @@ for chunk in pd.read_csv(file_path, chunksize=chunk_size):
 
 ### 10.1 Unit Tests
 
-**test_redflags.py:** Validierung der Red-Flag-Berechnung
+**src/test_redflags.py:** Validierung der Red-Flag-Berechnung
 
 ```python
 def test_single_bidder_flag():
