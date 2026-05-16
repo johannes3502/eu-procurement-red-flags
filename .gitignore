@@ -224,3 +224,8 @@ data/
 # Logs 
 /logs/
 *.log
+
+# personal
+presentation_questions.md
+
+/temp/
