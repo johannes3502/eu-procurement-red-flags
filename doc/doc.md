@@ -28,30 +28,42 @@ Analysis Layer (SQL + Python)
 
 ```
 red-flags-procurement-governance/
-├── project.md                  # Projektkonzept & Anforderungen (bleibt unverändert)
+├── project.md                  # Projektkonzept & Anforderungen
 ├── README.md                   # Benutzerhandbuch (aktualisiert)
 ├── TECHNICAL.md                # Dieses Dokument
 ├── src/download_data.py        # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
 ├── create_presentation.py      # Präsentationsgenerator (PowerPoint)
-├── src/test_redflags.py        # Red-Flag-Analyse & Tests
-├── flag7_10_analyse.py         # Spezifische Flags 7 & 10 Analyse
+├── src/test_redflags.py        # Red-Flag-Prototyp (veraltet — ersetzt durch ted/clean.py)
 ├── src/
-│   ├── data_aquisition/        # Datenquellen-Module (geplant/erweiterbar)
+│   ├── data_aquisition/        # Datenquellen-Module
 │   │   ├── ted/                # TED-Daten-Acquisition
 │   │   ├── cpi/                # CPI-Daten-Acquisition
 │   │   └── wgi/                # WGI-Daten-Acquisition
 │   ├── data_processing/        # Transformations-Module
-│   │   ├── lookup_countries.csv # ISO-Länder-Mapping (Alpha-2: DK, DE, RO, HU)
-│   │   └── profiling/              # 📊 Data Profiling & Analyse
-│   │       ├── __init__.py         # Package-Marker
-│   │       ├── profiling_utils.py  # Generic Data Profiling Utilities (8 Kategorien)
-│   │       ├── profile_raw_data.py # Data Profiling Orchestrator (CPI/WGI/TED)
-│   │       ├── analysis_utils.py   # Shared loader, constants, helpers
-│   │       ├── analysis_1_dedup.py # Dedup & Granularität
-│   │       ├── analysis_2_monetary.py # Extremwerte & Clipping
-│   │       ├── analysis_3_country_codes.py # Multi-Value WIN_COUNTRY_CODE
-│   │       └── analysis_4_red_flags.py # Red Flag Datenverfügbarkeit
-│   ├── dw/                     # Data Warehouse Layer (Sternschema)
+│   │   ├── lookup_countries.csv # ISO-Länder-Mapping (Single Point of Truth mit alpha_3, is_target)
+│   │   ├── profiling/              # 📊 Data Profiling & Analyse
+│   │   │   ├── __init__.py
+│   │   │   ├── profiling_utils.py  # Generic Data Profiling Utilities (8 Kategorien)
+│   │   │   ├── profile_raw_data.py # Data Profiling Orchestrator (CPI/WGI/TED)
+│   │   │   ├── analysis_utils.py   # Shared loader, constants, helpers
+│   │   │   ├── analysis_1_dedup.py # Dedup & Granularität
+│   │   │   ├── analysis_2_monetary.py # Extremwerte & Clipping
+│   │   │   ├── analysis_3_country_codes.py # Multi-Value WIN_COUNTRY_CODE
+│   │   │   └── analysis_4_red_flags.py # Red Flag Datenverfügbarkeit
+│   │   ├── __init__.py
+│   │   ├── config.py           # 🔧 ETL-Config: Pfade, Thresholds, Spaltenlisten, Type-Map
+│   │   ├── utils.py            # 🔧 Shared Utilities: Country-Lookup, TED-CSV-Loader, p95, Export
+│   │   ├── ted/
+│   │   │   ├── __init__.py
+│   │   │   └── clean.py        # 🔧 TED-spezifisch: clean_ted_*() (7 Fns) + compute_red_flags()
+│   │   ├── cpi/
+│   │   │   ├── __init__.py
+│   │   │   └── clean.py        # 🔧 CPI-spezifisch: clean_cpi()
+│   │   ├── wgi/
+│   │   │   ├── __init__.py
+│   │   │   └── clean.py        # 🔧 WGI-spezifisch: clean_wgi()
+│   │   └── run_cleanup.py      # 🔧 CLI-Orchestrierung: --years, --ted-input-dir, --cpi-input, --wgi-input
+│   ├── dw/                     # Data Warehouse Layer (Sternschema) — geplant
 │   ├── log/                    # Logging-Modul
 │   │   ├── __init__.py
 │   │   └── logger.py           # Zentrale Logging-Konfiguration
@@ -147,56 +159,79 @@ Alpha-3 (z. B. DEU) → Alpha-2 (z. B. DE) via lookup_countries.csv
 
 **CSV-Output-Spalten:** `country_iso3`, `year`, `control_of_corruption`, `government_effectiveness`, `political_stability`, `rule_of_law`, `regulatory_quality`, `voice_accountability`
 
-### 2.4 Länder-Mapping (lookup_countries.csv)
+### 2.4 Länder-Mapping (lookup_countries.csv) — Single Point of Truth
 
-**Inhalt:**
+**Inhalt (aktualisiert):**
 ```csv
-country_name,alpha_2
-Germany,DE
-Hungary,HU
-Romania,RO
-Denmark,DK
+country_name,alpha_2,alpha_3,is_target
+Germany,DE,DEU,true
+Denmark,DK,DNK,true
+Romania,RO,ROU,true
+Hungary,HU,HUN,true
 ```
 
 **Funktion:**
-- Zentrales Lookup für alle ISO-Konversionen
-- Ermöglicht deterministische Joins über `Land + Jahr`
+- Zentrales Lookup für alle ISO-Konversionen (Alpha‑2 ↔ Alpha‑3)
+- `is_target = true` identifiziert die vier Projektländer
+- Wird von `utils.load_target_countries()` / `utils.load_target_alpha2_set()` geladen
+- Von `ted.clean.clean_ted_filter_countries()` und `ted.clean.clean_ted_parse_winner()` genutzt
+- Wird später von `build_dim_country.py` für CPI/WGI-Joins genutzt
 - Reduziert auf 4 Länder (Positiv-, Benchmark-, Negativ-Beispiele)
 
 ---
 
-## 3. Red Flags – Berechnung & Implementierung
+## 3. Red Flags – Finale Definitionen (nach Deep‑Dive Analyse)
 
-### 3.1 Red-Flag-Definition (8 Indikatoren)
+### 3.1 Red-Flag-Definition (6+1 nutzbare Flags)
 
-| Flag | Name | Berechnung | Datenquelle | Ebene | Status |
-|------|------|-----------|-------------|--------|--------|
-| **1** | **Single-Bidder** | `NUMBER_OFFERS == 1` | TED | Zeile | **KERN** |
-| **2** | **Non-Open Procedure** | `TOP_TYPE != "OPE"` | TED | Zeile | **KERN** |
-| **3** | **No Prior Call** | `TOP_TYPE IN ('NIC', 'AWP')` | TED | Zeile | **KERN** |
-| 4 | Accelerated Procedure | `B_ACCELERATED == "Y"` | TED | Zeile | explorativ |
-| 5 | Award to Group | `B_AWARDED_TO_A_GROUP == "Y"` | TED | Zeile | explorativ |
-| 6 | High Value / Low Bidders | `AWARD_VALUE_EURO >= Q3 AND NUMBER_OFFERS <= 2` | TED | Zeile | explorativ |
-| 7 | Tax Haven Winner | `WIN_COUNTRY_CODE IN (EU-Steueroasen-Liste)` | TED | Zeile | explorativ |
-| **8** | **High Lot Fragmentation** | `LOT_COUNT_PER_NOTICE > 5` | TED | Notice | **KERN** |
+| Flag | Name | Berechnung | NULL-Strategie | Status |
+|------|------|-----------|---------------|--------|
+| **F1** | **Single-Bidder** | `NUMBER_OFFERS == 1` | NULL → False | ✅ Kern (60,4 %) |
+| **F2** | **Estimate/Award Discrepancy** | `VALUE_EURO / AWARD_VALUE_EURO > 10.0` | NULL → False | ✅ Kern (56,8 %) |
+| **F3** | **No Prior Call** | `TOP_TYPE IN ('NIC', 'AWP')` | ~0,08 % NULL → False | ✅ Kern (99,9 %) |
+| ~~F4~~ | ~~Accelerated Procedure~~ | ~~`B_ACCELERATED == 'Y'`~~ | — | 🔴 **Gestrichen** (99,16 % NULL) |
+| **F5** | **Award to Group** | `B_AWARDED_TO_A_GROUP == 'Y'` | NULL → 'N'; 2014–2015 hard False | ⚠️ Teilweise (46,8 % ab 2016) |
+| **F6** | **Single-Bidder + High Value** | `F1 AND AWARD_VALUE_EURO > per-year-p95` | NULL → False | ✅ Kern (57,1 %) |
+| **F7** | **Lot Fragmentation** | `NUMBER_AWARDS < LOTS_NUMBER * 0.5` | NULL → False | ✅ Voll nutzbar (96,2 %) |
 
-### 3.2 Implementierung in Python (src/test_redflags.py)
+**Wichtige Änderungen zum ursprünglichen Konzept:**
+- **F2** umdefiniert: von „Non-Open Procedure“ (`TOP_TYPE != "OPE"`) zu „Estimate/Award Discrepancy“ (`VALUE_EURO / AWARD_VALUE_EURO > 10.0`). Schwellwert von 2.0 verworfen (Mediang VALUE/AWARD = 8,06).
+- **F3** (`TOP_TYPE IN ('NIC', 'AWP')`) korrigiert: `'DIRECT'` ist kein standardisierter TED-Code.
+- **F4 gestrichen:** 99,16 % NULL.
+- **F6** verwendet `== 1` (nicht `<= 2`) und per‑year‑p95 (nicht globales p75).
+- **F7** geändert von `LOT_COUNT > 5` zu `NUMBER_AWARDS < LOTS_NUMBER * 0.5`.
 
+### 3.2 Implementierung in Python (src/data_processing/ted/clean.py)
+
+Die finale Implementierung aller Red Flags erfolgt in der Funktion `compute_red_flags()` in [`ted/clean.py`](red-flags-procurement-governance/src/data_processing/ted/clean.py). Der alte Prototyp in `test_redflags.py` ist veraltet.
+
+**Kernlogik (vereinfacht):**
 ```python
-import pandas as pd
+# F1: Single-Bidder
+df["F1"] = df["NUMBER_OFFERS"].fillna(0).astype(int) == 1
 
-# Laden der TED-Daten
-file_path = r"C:\...\data\raw\ted\2022.csv"
-df = pd.read_csv(file_path, encoding='utf-8', low_memory=False)
+# F2: Estimate/Award Discrepancy (Verhältnis > 10.0)
+a_notna = df["AWARD_VALUE_EURO"].notna() & (df["AWARD_VALUE_EURO"] != 0)
+ratio = np.where(a_notna & df["VALUE_EURO"].notna(),
+                 df["VALUE_EURO"].fillna(0) / df["AWARD_VALUE_EURO"], 0.0)
+df["F2"] = ratio > 10.0
 
-# Kern-Red Flags (zeilenbasiert)
-mask1 = df['NUMBER_OFFERS'] == 1                          # Flag 1
-mask2 = df['TOP_TYPE'] != "OPE"                           # Flag 2
-mask3 = df['TOP_TYPE'].isin(['NIC', 'AWP'])              # Flag 3
+# F3: No Prior Call
+df["F3"] = df["TOP_TYPE"].fillna("").isin(["NIC", "AWP"])
 
-# Explorative Red Flags
-mask4 = df['B_ACCELERATED'] == "Y"                        # Flag 4
-mask5 = df['B_AWARDED_TO_A_GROUP'] == "Y"               # Flag 5
+# F5: Award to Group (2014–2015 = False)
+df["F5"] = False
+df.loc[df["YEAR"] > 2015, "F5"] = df.loc[df["YEAR"] > 2015, "B_AWARDED_TO_A_GROUP"].fillna("N") == "Y"
+
+# F6: Single-Bidder + per-year-p95
+p95_map = {year: vals.quantile(0.95) for year, vals in df.groupby("YEAR")["AWARD_VALUE_EURO"]}
+df["_p95"] = df["YEAR"].map(p95_map)
+df["F6"] = df["F1"] & (df["AWARD_VALUE_EURO"].fillna(0) > df["_p95"])
+
+# F7: Lot Fragmentation
+df["F7"] = (df["NUMBER_AWARDS"].fillna(999_999).astype(float) <
+            df["LOTS_NUMBER"].fillna(0).astype(float) * 0.5)
+```
 
 high_value_threshold = df['AWARD_VALUE_EURO'].quantile(0.75)
 mask6 = (df['AWARD_VALUE_EURO'] >= high_value_threshold) & (df['NUMBER_OFFERS'] <= 2)  # Flag 6
@@ -217,28 +252,16 @@ print(f"No Prior Call: {mask3.sum()} Treffer")
 
 ### 3.3 Red-Flag-Kombinationen (mehrdimensionale Risikosignaturen)
 
-**Vier Kern-Kombinationen:**
+**Vier finale Kombinationen (berechnet in `compute_red_flags()`):**
 
-| Kombination | Logik | SQL-Bedingung |
-|-------------|-------|--------------|
-| **Single-Bidder + Non-Open** | Wettbewerb faktisch ausgeschaltet | `mask1 AND mask2` |
-| **No Prior Call + High Value/Low Bidders** | Direktvergabe hoher Wert, kaum Bieter | `mask3 AND mask6` |
-| **Accelerated + Non-Open + Single-Bidder** | Perfekte Red-Flag-Trias | `mask4 AND mask2 AND mask1` |
-| **High Lot Fragmentation + Single-Bidder** | Lose möglicherweise auf einen Anbieter zugeschnitten | `(notice in high_lot_notices) AND mask1` |
+| Kombination | Logik | Aussage |
+|-------------|-------|---------|
+| `comb_single_discrepancy` | `F1 AND F2` | Einzelbieter + extrem überhöhte Schätzung → Schätzung diente evtl. zur Wettbewerbsabschreckung |
+| `comb_single_non_open` | `F1 AND (TOP_TYPE != 'OPE')` | Einzelbieter in nicht-offenem Verfahren – direkt aus TOP_TYPE (nicht F2) |
+| `comb_no_call_high_value` | `F3 AND F6` | Direktvergabe ohne Aufruf bei sehr hohem Wert und nur einem Bieter |
+| `comb_frag_single` | `F7 AND F1` | Viele Lose, nur ein Bieter → Lose evtl. auf diesen Bieter zugeschnitten |
 
-**Implementierung:**
-```python
-# Kombinationen
-comb1 = (mask1) & (mask2)
-comb2 = (mask3) & (mask6)
-comb3 = (mask4) & (mask2) & (mask1)
-comb4 = df['ID_NOTICE_CAN'].isin(high_lot_notices) & mask1
-
-# Zählung
-print(f"Single-Bidder + Non-Open: {comb1.sum()}")
-print(f"No Prior Call + High Value/Low Bidders: {comb2.sum()}")
-# ...
-```
+> **Hinweis:** `comb_accel_nonopen_single` (ursprünglich F4 AND TOP_TYPE!='OPE' AND F1) ist entfallen, da F4 gestrichen wurde.
 
 ---
 
@@ -246,31 +269,35 @@ print(f"No Prior Call + High Value/Low Bidders: {comb2.sum()}")
 
 ### 4.1 Faktentabelle: `fact_tender`
 
-**Primärschlüssel:** Komposite aus Fremdschlüsseln (Denormalisierung zu Performance)
+**Primärschlüssel:** `ID_AWARD` (natürlicher Schlüssel, nach CORRECTIONS-aware Dedup).
 
-**Spalten:**
+**Spalten (aktualisiert — finale Definitionen):**
 
 | Spalte | Typ | Bedeutung |
 |--------|-----|----------|
-| `id_tender_key` | INT | Surrogate Key (Auto-increment) |
-| `id_notice_can` | VARCHAR | TED-Referenz (natürlicher Schlüssel, joinable) |
+| `id_award` | VARCHAR | Naturlicher PK (aus TED) |
+| `id_notice_can` | VARCHAR | Degenerierte Dimension (kein FK) |
+| `id_lot` | VARCHAR | Degenerierte Dimension (kein FK) |
 | `fk_country_key` | INT | FK → dim_country |
 | `fk_time_key` | INT | FK → dim_time |
 | `fk_cpv_key` | INT | FK → dim_cpv |
 | `fk_procedure_type_key` | INT | FK → dim_procedure_type |
-| `award_value_euro` | DECIMAL(15,2) | Zuschlagswert |
-| `estimated_value_euro` | DECIMAL(15,2) | Geschätzter Wert |
-| `number_offers` | INT | Anzahl Angebote |
-| `flag_1_single_bidder` | BOOLEAN | Flag 1 |
-| `flag_2_non_open` | BOOLEAN | Flag 2 |
-| `flag_3_no_prior_call` | BOOLEAN | Flag 3 |
-| `flag_4_accelerated` | BOOLEAN | Flag 4 |
-| `flag_5_award_group` | BOOLEAN | Flag 5 |
-| `flag_6_high_value_low_bidders` | BOOLEAN | Flag 6 |
-| `flag_7_tax_haven` | BOOLEAN | Flag 7 |
-| `comb_1_sb_non_open` | BOOLEAN | Kombination 1 |
-| `comb_2_npc_hvlb` | BOOLEAN | Kombination 2 |
-| `comb_3_acc_non_open_sb` | BOOLEAN | Kombination 3 |
+| `award_value_euro` | DECIMAL(18,2) | Zuschlagswert (geclippt auf per-year-p99) |
+| `value_euro` | DECIMAL(18,2) | Geschätzter Wert (für F2) |
+| `number_offers` | SMALLINT | Anzahl Angebote |
+| `winner_country` | CHAR(2) | Geparstes Gewinnerland (any-segment) |
+| `flag_f1` | BOOLEAN | Single-Bidder |
+| `flag_f2` | BOOLEAN | Estimate/Award Discrepancy (> 10.0) |
+| `flag_f3` | BOOLEAN | No Prior Call (NIC/AWP) |
+| `flag_f5` | BOOLEAN | Award to Group (ab 2016) |
+| `flag_f6` | BOOLEAN | Single-Bidder + per-year-p95 |
+| `flag_f7` | BOOLEAN | Lot Fragmentation |
+| `comb_single_discrepancy` | BOOLEAN | F1 AND F2 |
+| `comb_single_non_open` | BOOLEAN | F1 AND (TOP_TYPE != 'OPE') |
+| `comb_no_call_high_value` | BOOLEAN | F3 AND F6 |
+| `comb_frag_single` | BOOLEAN | F7 AND F1 |
+
+> **F4 (Accelerated) ist gestrichen** — 99,16 % NULL. Die Spalte `flag_f4` existiert nicht.
 
 ### 4.2 Dimensionen
 

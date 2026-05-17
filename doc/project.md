@@ -137,10 +137,13 @@ Die Governance-Scores sind **keine eigene Dimension**, sondern Attribute der Lä
 | Combo | Logik | Aussage |
 |-------|-------|---------|
 | `comb_single_discrepancy` | `F1 AND F2` | Einzelbieter + extrem überhöhte Schätzung → Schätzung diente evtl. zur Wettbewerbsabschreckung |
+| `comb_single_non_open` | `F1 AND (TOP_TYPE != 'OPE')` | Einzelbieter in nicht-offenem Verfahren – direkt aus TOP_TYPE abgeleitet, nicht aus F2 (F2 ist jetzt Discrepancy) |
 | `comb_no_call_high_value` | `F3 AND F6` | Direktvergabe ohne Aufruf bei sehr hohem Wert und nur einem Bieter |
 | `comb_frag_single` | `F7 AND F1` | Viele Lose, nur ein Bieter → Lose evtl. auf diesen Bieter zugeschnitten |
 
-**Hinweis:** Die ursprüngliche Kombination „Accelerated + Non-Open + Single-Bidder“ ist entfallen (F4 gestrichen).
+**Hinweise:**
+- Die ursprüngliche Kombination „Accelerated + Non-Open + Single-Bidder“ ist entfallen (F4 gestrichen).
+- `comb_single_non_open` verwendet `TOP_TYPE != 'OPE'` direkt (nicht F2), da F2 von „Non-Open Procedure“ auf „Estimate/Award Discrepancy“ umdefiniert wurde.
 
 ---
 
@@ -232,9 +235,9 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 
 ---
 
-## 16. Durchgeführte Analysen
+## 16. Durchgeführte Analysen & Implementierung
 
-| Analyse | Datei(en) | Ergebnis |
+| Analyse / Modul | Datei(en) | Ergebnis |
 |---------|-----------|----------|
 | Data Profiling (Datenqualität) | `data_processing/profiling/profile_raw_data.py` | NULL-Raten, Wertebereiche, Spaltenabdeckung pro Jahr |
 | Deep‑Dive 1: Dedup & Granularität | `profiling/analysis_1_dedup.py` | **ID_AWARD als Fact-PK**; CORRECTIONS-aware Dedup-Strategie |
@@ -243,6 +246,12 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 | Deep‑Dive 4: Red‑Flag‑Machbarkeit | `profiling/analysis_4_red_flags.py` | **F4 gestrichen**, F5 ab 2016, F6 mit per‑year‑p95 |
 | Schwachstellenanalyse | manuell (Architekt) | **F2 10.0**, **F3 NIC/AWP**, **F6 ==1** final verifiziert |
 | Data Preparation Plan | `plans/data-preparation-for-warehouse.md` | Vollständige ETL-Spezifikation mit allen Regeln |
+| **ETL‑Config** (zentrale Konstanten) | `data_processing/config.py` | Pfade, Thresholds, Spaltenlisten, Exasol-Type-Map |
+| **Shared‑Utilities** (Wiederverwendbare Helfer) | `data_processing/utils.py` | Country-Lookup, TED-CSV-Loader, p95, Parquet-Export, Step-Logging |
+| **Cleanup‑Modul TED** | `data_processing/ted/clean.py` | 7 clean_ted_*() + compute_red_flags() |
+| **Cleanup‑Modul CPI** | `data_processing/cpi/clean.py` | clean_cpi() |
+| **Cleanup‑Modul WGI** | `data_processing/wgi/clean.py` | clean_wgi() |
+| **Orchestrierung** (alle Datensätze) | `data_processing/run_cleanup.py` | CLI‑Pipeline: --years, --ted-input-dir, --cpi-input, --wgi-input, --output-dir |
 
 Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.md`](red-flags-procurement-governance/doc/profiling/analysis/analysis_results.md).
 
@@ -258,19 +267,18 @@ Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.m
 | 4 Deep‑Dive‑Analysen (Dedup, Monetary, Country, Flags) | ✅ Abgeschlossen |
 | Red‑Flag‑Definitionen (final, datengestützt) | ✅ Abgeschlossen |
 | Data Preparation Plan (vollständige ETL-Spezifikation) | ✅ Abgeschlossen |
-| **ETL‑Pipeline (Transform + Load)** | **🚧 In Arbeit (Phase 3)** |
-| **Data Warehouse DDL & Exasol‑Integration** | **🚧 In Arbeit (Phase 3)** |
+| **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ **Abgeschlossen** — Config → Utils → per‑dataset Cleanup-Submodule → Orchestrierung |
+| **Dimension Builder + fact_tender** | 📋 Geplant |
+| **Exasol DDL & Load** | 📋 Geplant |
 | Analyse-Queries & Visualisierung | 📋 Geplant |
 
 **Nächste Schritte (Phase 3):**
-- `src/dw/`‑Modulstruktur anlegen
-- `transform_ted.py` implementieren (Filter, Dedup, Clipping, WIN_COUNTRY_CODE-Parsing, CPV-Normalisierung)
-- `compute_red_flags.py` implementieren (F1–F3, F5–F7 nach finalen Regeln)
-- Dimension Builder (4 Module) + `build_fact_tender.py`
+- Dimension Builder (4 Module: Zeit, Land (SCD 2), CPV, Verfahrenstyp)
+- `build_fact_tender.py` (Faktentabelle mit Surrogat-Keys)
 - Exasol DDL (`CREATE TABLE`) und `load_to_exasol.py`
 - Beispielzeilen für Exercise 2, Question 4
 
 ---
 
-*Stand: Mai 2026 (zweite Revision)*
-*Data Preparation Plan abgeschlossen – ETL‑Implementierung gestartet.*
+*Stand: Mai 2026 (dritte Revision)*
+*Data Preparation Plan abgeschlossen – ETL-Core implementiert (per‑dataset Submodule: config/utils/ted.clean/cpi.clean/wgi.clean/run_cleanup) – nächste: Dimensionen & Faktentabelle.*
