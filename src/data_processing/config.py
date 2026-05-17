@@ -1,8 +1,9 @@
 """
 config.py — Central constants for the ETL pipeline.
 
-Single source of truth for all parameters used by utils.py, cleanup.py,
-and run_cleanup.py.  No functions, no logic.
+Single source of truth for all parameters used by utils.py, the per-dataset
+clean modules (ted/clean.py, cpi/clean.py, wgi/clean.py), and
+run_cleanup.py.  No functions, no logic.
 """
 
 from pathlib import Path
@@ -15,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # ---------------------------------------------------------------------------
 DATA_DIR_RAW: Path = PROJECT_ROOT / "data" / "raw"
 DATA_DIR_PROCESSED: Path = PROJECT_ROOT / "data" / "processed"
-LOOKUP_PATH: Path = PROJECT_ROOT / "src" / "data_processing" / "lookup_countries.csv"
+LOOKUP_PATH: Path = PROJECT_ROOT / "data" / "lookup" / "lookup_countries.csv"
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 
 # ---------------------------------------------------------------------------

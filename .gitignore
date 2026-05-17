@@ -217,9 +217,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
 # data
-data/
+data/*
+!data/lookup/
+!data/lookup/**
+
 
 # Logs 
 /logs/

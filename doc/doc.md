@@ -40,7 +40,8 @@ red-flags-procurement-governance/
 │   │   ├── cpi/                # CPI-Daten-Acquisition
 │   │   └── wgi/                # WGI-Daten-Acquisition
 │   ├── data_processing/        # Transformations-Module
-│   │   ├── lookup_countries.csv # ISO-Länder-Mapping (Single Point of Truth mit alpha_3, is_target)
+│   │   ├── config.py           # 🔧 ETL-Config: Pfade, Thresholds, Spaltenlisten, Type-Map
+│   │   ├── utils.py            # 🔧 Shared Utilities: Country-Lookup, TED-CSV-Loader, p95, Export
 │   │   ├── profiling/              # 📊 Data Profiling & Analyse
 │   │   │   ├── __init__.py
 │   │   │   ├── profiling_utils.py  # Generic Data Profiling Utilities (8 Kategorien)
@@ -85,7 +86,15 @@ red-flags-procurement-governance/
 │   │   │   └── ted_2022.csv    # Beispiel-Datei
 │   │   ├── cpi/                # cpi_raw.csv
 │   │   └── wgi/                # wgi_raw.csv
-│   └── processed/              # Verarbeitete Daten (DWH-ready)
+│   ├── lookup/
+│   │   └── lookup_countries.csv # ISO-Länder-Mapping (SPoT: alpha_3, is_target)
+│   └── processed/              # Verarbeitete Daten (DWH-ready, pro Dataset)
+│       ├── ted/
+│       │   └── ted_clean.parquet
+│       ├── cpi/
+│       │   └── cpi_clean.parquet
+│       └── wgi/
+│           └── wgi_clean.parquet
 ├── temp/                       # Temporäre Dateien, Zwischenergebnisse
 ├── logs/                       # Anwendungs-Logs (inkl. download_data.log)
 └── tests/                      # Unit & Integration Tests
@@ -159,7 +168,7 @@ Alpha-3 (z. B. DEU) → Alpha-2 (z. B. DE) via lookup_countries.csv
 
 **CSV-Output-Spalten:** `country_iso3`, `year`, `control_of_corruption`, `government_effectiveness`, `political_stability`, `rule_of_law`, `regulatory_quality`, `voice_accountability`
 
-### 2.4 Länder-Mapping (lookup_countries.csv) — Single Point of Truth
+### 2.4 Länder-Mapping (`data/lookup/lookup_countries.csv`) — Single Point of Truth
 
 **Inhalt (aktualisiert):**
 ```csv

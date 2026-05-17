@@ -232,13 +232,17 @@ def main() -> None:
         console_level=getattr(logging, args.log_level.upper()),
     )
 
-    # Create output directory
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directories (one per dataset)
+    ted_output_dir = args.output_dir / "ted"
+    cpi_output_dir = args.output_dir / "cpi"
+    wgi_output_dir = args.output_dir / "wgi"
+    for d in (ted_output_dir, cpi_output_dir, wgi_output_dir):
+        d.mkdir(parents=True, exist_ok=True)
 
     summary: Dict[str, Any] = {}
 
     # ---- TED ----
-    ted_output = args.output_dir / "ted_clean.parquet"
+    ted_output = ted_output_dir / "ted_clean.parquet"
     df_ted = run_ted_pipeline(
         years=args.years,
         ted_input_dir=args.ted_input_dir,
@@ -251,7 +255,7 @@ def main() -> None:
     }
 
     # ---- CPI ----
-    cpi_output = args.output_dir / "cpi_clean.parquet"
+    cpi_output = cpi_output_dir / "cpi_clean.parquet"
     df_cpi = run_cpi_pipeline(args.cpi_input)
     utils.export_parquet(df_cpi, cpi_output)
     summary["cpi"] = {
@@ -261,7 +265,7 @@ def main() -> None:
     }
 
     # ---- WGI ----
-    wgi_output = args.output_dir / "wgi_clean.parquet"
+    wgi_output = wgi_output_dir / "wgi_clean.parquet"
     df_wgi = run_wgi_pipeline(args.wgi_input)
     utils.export_parquet(df_wgi, wgi_output)
     summary["wgi"] = {
