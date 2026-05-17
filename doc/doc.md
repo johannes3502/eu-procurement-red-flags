@@ -42,8 +42,15 @@ red-flags-procurement-governance/
 │   │   └── wgi/                # WGI-Daten-Acquisition
 │   ├── data_processing/        # Transformations-Module
 │   │   ├── lookup_countries.csv # ISO-Länder-Mapping (Alpha-2: DK, DE, RO, HU)
-│   │   ├── profiling_utils.py  # 📊 Generic Data Profiling Utilities (8 Kategorien)
-│   │   └── profile_raw_data.py # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
+│   │   └── profiling/              # 📊 Data Profiling & Analyse
+│   │       ├── __init__.py         # Package-Marker
+│   │       ├── profiling_utils.py  # Generic Data Profiling Utilities (8 Kategorien)
+│   │       ├── profile_raw_data.py # Data Profiling Orchestrator (CPI/WGI/TED)
+│   │       ├── analysis_utils.py   # Shared loader, constants, helpers
+│   │       ├── analysis_1_dedup.py # Dedup & Granularität
+│   │       ├── analysis_2_monetary.py # Extremwerte & Clipping
+│   │       ├── analysis_3_country_codes.py # Multi-Value WIN_COUNTRY_CODE
+│   │       └── analysis_4_red_flags.py # Red Flag Datenverfügbarkeit
 │   ├── dw/                     # Data Warehouse Layer (Sternschema)
 │   ├── log/                    # Logging-Modul
 │   │   ├── __init__.py
@@ -55,7 +62,10 @@ red-flags-procurement-governance/
 │   ├── profiling/              # 📊 Auto-generierte Data Profiling Reports
 │   │   ├── profile_cpi_*.md
 │   │   ├── profile_wgi_*.md
-│   │   └── profile_ted_*_*.md
+│   │   ├── profile_ted_*_*.md
+│   │   └── analysis/           # Deep-Dive Analyse-Outputs
+│   │       ├── analysis_results.md
+│   │       └── analysis_*_summary.csv
 │   └── profiling_script_plan.md # Planungsdokument für das Profiling-Script
 ├── data/
 │   ├── raw/                    # Rohdaten (unverarbeitet)
@@ -878,18 +888,18 @@ umfassende Markdown-Qualitätsreports in `doc/profiling/`. Es ist modular aufgeb
 
 | Modul | Aufgabe | Abhängigkeiten |
 |-------|---------|----------------|
-| [`profiling_utils.py`](src/data_processing/profiling_utils.py) | 8 generische Profiling-Funktionen (kein Quellbezug) | pandas, numpy |
-| [`profile_raw_data.py`](src/data_processing/profile_raw_data.py) | Quellspezifische Logik + Orchestrierung | pandas, numpy, `profiling_utils`, `setup_logger` |
+| [`profiling_utils.py`](src/data_processing/profiling/profiling_utils.py) | 8 generische Profiling-Funktionen (kein Quellbezug) | pandas, numpy |
+| [`profile_raw_data.py`](src/data_processing/profiling/profile_raw_data.py) | Quellspezifische Logik + Orchestrierung | pandas, numpy, `profiling_utils`, `setup_logger` |
 
 ### 12.2 Ausführung
 
 ```bash
-python src/data_processing/profile_raw_data.py
+python src/data_processing/profiling/profile_raw_data.py
 ```
 
 ### 12.3 Die 8 Profiling-Kategorien
 
-| # | Kategorie | Funktion (in `profiling_utils.py`) | Beschreibung |
+| # | Kategorie | Funktion (in [`profiling_utils.py`](src/data_processing/profiling/profiling_utils.py)) | Beschreibung |
 |---|-----------|-----------------------------------|-------------|
 | 1 | **Basic Info** | `compute_basic_info()` | Zeilenanzahl, Spaltenanzahl, Speicher in MB |
 | 2 | **Datentypen** | `compute_dtype_report()` | pandas-Typen pro Spalte, Speicher in Bytes |
@@ -922,7 +932,7 @@ python src/data_processing/profile_raw_data.py
 
 ### 12.5 Output
 
-Alle Reports werden im [`doc/profiling/`](doc/profiling/)-Verzeichnis abgelegt, benannt nach dem Muster:
+Alle Profiling-Reports werden im [`doc/profiling/`](doc/profiling/)-Verzeichnis abgelegt, benannt nach dem Muster:
 - `profile_cpi_<DATUM>.md`
 - `profile_wgi_<DATUM>.md`
 - `profile_ted_<YYYY>_<DATUM>.md`
@@ -958,8 +968,67 @@ Alle Reports werden im [`doc/profiling/`](doc/profiling/)-Verzeichnis abgelegt, 
 3. **ML-Basierte Anomalieerkennung**: Clustering von Red-Flag-Mustern
 4. **Dashboard**: Tableau/PowerBI für Live-Analysen
 5. **API-Layer**: REST-API für externe Systeme
-6. ~~**Datenqualität**: Automatisierte Checks, Data Profiling~~ ✅ **Umgesetzt**
+6. ~~**Datenqualität & Profiling**: Automatisierte Checks, Data Profiling, Deep-Dive Analyse-Scripte~~ ✅ **Umgesetzt**
 7. **Skalierung**: Spark/Hadoop für Multi-Jahrzehnte-Daten
+
+---
+
+## 14. Deep-Dive Analyse-Scripte (ETL-Design-Entscheidungen)
+
+### 14.1 Überblick
+
+Zusätzlich zum generischen Data Profiling (Abschnitt 12) wurden vier fokussierte Analyse-Scripte erstellt, die konkrete ETL-Design-Entscheidungen quantifizieren. Alle Scripte liegen im Package [`src/data_processing/profiling/`](src/data_processing/profiling/).
+
+### 14.2 Script-Übersicht
+
+| # | Script | Fragestellung | Ausgabedatei (in [`doc/profiling/analysis/`](doc/profiling/analysis/)) |
+|---|--------|--------------|-----------------------------------------------------------------------|
+| 1 | [`analysis_1_dedup.py`](src/data_processing/profiling/analysis_1_dedup.py) | Ist `ID_AWARD` als Fact-PK geeignet? Wie hoch ist die Duplikatrate? | `analysis_1_dedup_summary.csv` |
+| 2 | [`analysis_2_monetary.py`](src/data_processing/profiling/analysis_2_monetary.py) | Welcher Clipping-Threshold für Extremwerte? `AWARD_VALUE_EURO` vs `VALUE_EURO`? | `analysis_2_monetary_summary.csv` |
+| 3 | [`analysis_3_country_codes.py`](src/data_processing/profiling/analysis_3_country_codes.py) | Wie sind Multi-Value `WIN_COUNTRY_CODE`s (`---` separiert) zu parsen? | `analysis_3_country_codes_summary.csv` |
+| 4 | [`analysis_4_red_flags.py`](src/data_processing/profiling/analysis_4_red_flags.py) | Welche Red Flags sind datenseitig überhaupt berechenbar? | `analysis_4_red_flags_summary.csv` |
+
+### 14.3 Gemeinsame Infrastruktur
+
+Die Scripte nutzen [`analysis_utils.py`](src/data_processing/profiling/analysis_utils.py) als shared module:
+
+```python
+from src.data_processing.profiling.analysis_utils import (
+    DATA_DIR,         # data/raw/ted/
+    OUTPUT_DIR,       # doc/profiling/analysis/ (wird automatisch erstellt)
+    YEARS,            # [2014, …, 2023]
+    TARGET_COUNTRIES, # {"DE": "Germany", …}
+    KEEP_COLUMNS,     # 15 relevante TED-Spalten
+    load_ted_data,    # Lädt alle TED-CSVs → gefiltert auf 4 Länder
+    pct_of,           # Formatierungs-Helper
+    print_header,     # Konsolen-Ausgabe
+    print_subsection,
+)
+```
+
+### 14.4 Ausführung
+
+```bash
+# Einzeln (empfohlen — jede Analyse dauert 1-3 Min.)
+cd red-flags-procurement-governance
+venv\Scripts\activate
+python -m src.data_processing.profiling.analysis_1_dedup
+python -m src.data_processing.profiling.analysis_2_monetary
+python -m src.data_processing.profiling.analysis_3_country_codes
+python -m src.data_processing.profiling.analysis_4_red_flags
+```
+
+CSV-Outputs und die konsolidierte Ergebnisdatei [`analysis_results.md`](doc/profiling/analysis/analysis_results.md) landen automatisch in [`doc/profiling/analysis/`](doc/profiling/analysis/).
+
+### 14.5 Zentrale Erkenntnisse (Kurzfassung)
+
+| Entscheidung | Empfehlung | Begründung |
+|-------------|-----------|-----------|
+| **Fact Primary Key** | `ID_AWARD` mit CORRECTIONS-bewusstem Dedup | `ID_LOT` ist 2014-2015 zu 100% NULL; Composite-Key nicht nutzbar |
+| **Clipping Threshold** | Per-Jahr p99 (~€9-26 M) | Clippt ~1% der nicht-NULL Werte; entfernt 62 Sentinel-Werte (exakt €10 Bio.) |
+| **WIN_COUNTRY_CODE** | "Any segment match" Regel | 6.49% Multi-Value mit `---`; Ziel-Länder nur zu ~33% an Position 1; "any match" erreicht 98.63% Coverage |
+| **Flag 4 (B_ACCELERATED)** | **DROP** | 99.16% NULL — nicht verwertbar |
+| **Flag 5 (B_AWARDED_TO_A_GROUP)** | **BEHALTEN, 2014-2015 ausschließen** | 53.25% NULL gesamt; 0% in 2014, ab 2016 ~46-62% verfügbar |
 
 ---
 

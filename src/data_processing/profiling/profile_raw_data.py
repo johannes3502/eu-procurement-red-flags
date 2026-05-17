@@ -24,7 +24,7 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 # Project root setup  (allows ``from src.log import ...``)
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.log import setup_logger
@@ -32,7 +32,7 @@ from src.log import setup_logger
 # ---------------------------------------------------------------------------
 # Import generic profiling utilities
 # ---------------------------------------------------------------------------
-from src.data_processing.profiling_utils import (
+from src.data_processing.profiling.profiling_utils import (
     compute_basic_info,
     compute_dtype_report,
     compute_missing_values,
@@ -380,7 +380,7 @@ def main() -> None:
     logger.info("=" * 60)
 
     # -- Directories ------------------------------------------------------
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]
     data_dir = project_root / "data" / "raw"
     output_dir = project_root / "doc" / "profiling"
     output_dir.mkdir(parents=True, exist_ok=True)
