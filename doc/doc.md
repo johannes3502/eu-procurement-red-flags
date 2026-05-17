@@ -473,12 +473,35 @@ Die Pipeline durchläuft 8 Schritte in Reihenfolge:
 
 **3. CPI/WGI-Pipelines** — jeweils Laden → clean → export (deutlich kürzer als TED).
 
-**4. Ausgabe:** Drei Parquet-Dateien in per-Dataset-Subordnern:
+**4. Speichermanagement (Memory Optimization)**
+
+Die TED-Pipeline verarbeitet ~2,2 Mio. Zeilen über 8 Clean-Schritte. Jeder Schritt erzeugt ein neues
+DataFrame. Ohne explizite Speicherfreigabe liegen bis zu **zwei DataFrames gleichzeitig** im RAM
+(altes + neues), was den Memory-Peak von ~3,5 GB (ein DataFrame) auf ~7 GB verdoppelt.
+
+Daher nutzt die Pipeline `del` + `gc.collect()` zwischen jedem Schritt:
+
+```python
+# Jeder Schritt: altes DataFrame sofort freigeben
+_next = ted_clean.clean_ted_filter_countries(df)
+del df; gc.collect()      # ← altes df gelöscht, GC erzwungen
+df = _next
+```
+
+Dasselbe gilt zwischen den Datensätzen in [`main()`](src/data_processing/run_cleanup.py): Nach TED-Export
+wird `df_ted` freigegeben, bevor CPI geladen wird; nach CPI-Export vor WGI usw.
+
+**Effekt:**
+- **Peak:** ~3–4 GB statt ~7 GB
+- **Latenz:** `gc.collect()` kostet ~µs — kein spürbarer Overhead
+- **Keine Datei-Artefakte:** Pipeline liest nur Roh-CSVs, schreibt 3 Parquet-Dateien, keine Temp-Files
+
+**5. Ausgabe:** Drei Parquet-Dateien in per-Dataset-Subordnern:
 - `data/processed/ted/ted_clean.parquet`
 - `data/processed/cpi/cpi_clean.parquet`
 - `data/processed/wgi/wgi_clean.parquet`
 
-**5. Aufruf:**
+**6. Aufruf:**
 ```bash
 python -m src.data_processing.run_cleanup
 ```

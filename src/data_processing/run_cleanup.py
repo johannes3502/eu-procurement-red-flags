@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import sys
@@ -85,26 +86,41 @@ def run_ted_pipeline(
     df = utils.load_ted_csvs(years, cols=TED_RAW_COLUMNS)
     stats: Dict[str, Any] = {"initial_rows": len(df)}
 
-    # Step 2–8
-    df = ted_clean.clean_ted_filter_countries(df)
+    # Step 2–8 — each step releases the old DataFrame immediately
+    # to keep only one in-memory copy at a time
+    _next = ted_clean.clean_ted_filter_countries(df)
+    del df; gc.collect()
+    df = _next
     stats["after_filter"] = len(df)
 
-    df = ted_clean.clean_ted_dedup(df)
+    _next = ted_clean.clean_ted_dedup(df)
+    del df; gc.collect()
+    df = _next
     stats["after_dedup"] = len(df)
 
-    df = ted_clean.clean_ted_clip_values(df, clip_pct=clip_percentile)
+    _next = ted_clean.clean_ted_clip_values(df, clip_pct=clip_percentile)
+    del df; gc.collect()
+    df = _next
     stats["after_clip"] = len(df)
 
-    df = ted_clean.clean_ted_parse_winner(df)
+    _next = ted_clean.clean_ted_parse_winner(df)
+    del df; gc.collect()
+    df = _next
     stats["after_parse_country"] = len(df)
 
-    df = ted_clean.clean_ted_normalize_cpv(df)
+    _next = ted_clean.clean_ted_normalize_cpv(df)
+    del df; gc.collect()
+    df = _next
     stats["after_normalize_cpv"] = len(df)
 
-    df = ted_clean.clean_ted_select_columns(df)
+    _next = ted_clean.clean_ted_select_columns(df)
+    del df; gc.collect()
+    df = _next
     stats["after_select"] = len(df)
 
-    df = ted_clean.compute_red_flags(df)
+    _next = ted_clean.compute_red_flags(df)
+    del df; gc.collect()
+    df = _next
     stats["after_flags"] = len(df)
     stats["final_columns"] = list(df.columns)
 
@@ -253,6 +269,7 @@ def main() -> None:
         "columns": len(df_ted.columns),
         "output": str(ted_output),
     }
+    del df_ted; gc.collect()  # free TED before starting CPI
 
     # ---- CPI ----
     cpi_output = cpi_output_dir / "cpi_clean.parquet"
@@ -263,6 +280,7 @@ def main() -> None:
         "columns": len(df_cpi.columns),
         "output": str(cpi_output),
     }
+    del df_cpi; gc.collect()  # free CPI before starting WGI
 
     # ---- WGI ----
     wgi_output = wgi_output_dir / "wgi_clean.parquet"
@@ -273,6 +291,7 @@ def main() -> None:
         "columns": len(df_wgi.columns),
         "output": str(wgi_output),
     }
+    del df_wgi; gc.collect()  # free WGI after export
 
     # ---- Final summary ----
     logger.info("=" * 60)
