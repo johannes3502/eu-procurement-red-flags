@@ -208,7 +208,12 @@ def clean_ted_parse_winner(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_ted_normalize_cpv(df: pd.DataFrame) -> pd.DataFrame:
-    """Zero-pad CPV codes to exactly 8 digits, rename to ``cpv_code``.
+    """Normalize CPV codes to exactly 8 digits, rename to ``cpv_code``.
+
+    Handles two sources of CPV representation in raw TED:
+    - ``int64`` years (most years): ``3110000`` → ``'03110000'``
+    - ``float64`` years (2014, 2016, 2017 — NaN forces float dtype):
+      ``3110000.0`` → ``'3110000'`` → ``'03110000'``
 
     Drops rows where CPV is NULL (cannot normalise).
 
@@ -230,17 +235,36 @@ def clean_ted_normalize_cpv(df: pd.DataFrame) -> pd.DataFrame:
     if before != after:
         logger.info("clean_ted_normalize_cpv: dropped %d rows with NULL CPV", before - after)
 
-    df["cpv_code"] = df["CPV"].astype(str).str.zfill(8)
+    # Step 1: convert to string — int64 → "3110000", float64 → "3110000.0"
+    raw_str = df["CPV"].astype(str)
+
+    # Step 2: count how many had float-representation (informational)
+    float_count = raw_str.str.contains(r"\.", regex=True).sum()
+    if float_count > 0:
+        logger.info(
+            "clean_ted_normalize_cpv: %d CPVs had float representation (.0) — stripping decimals",
+            float_count,
+        )
+
+    # Step 3: strip trailing ".0" from float years, then zero-pad to 8 digits
+    df["cpv_code"] = raw_str.str.replace(r"\.0+$", "", regex=True).str.zfill(8)
     df = df.drop(columns=["CPV"])
 
+    # Sanity check: all codes should now be exactly 8 chars
     invalid = df[df["cpv_code"].str.len() != 8]
     if len(invalid) > 0:
         logger.warning(
-            "clean_ted_normalize_cpv: %d codes are not exactly 8 digits after zfill",
+            "clean_ted_normalize_cpv: %d codes still not 8 digits after fix "
+            "(sample: %s)",
             len(invalid),
+            invalid["cpv_code"].unique()[:10].tolist(),
         )
 
-    logger.info("clean_ted_normalize_cpv: %d rows with valid cpv_code", len(df))
+    logger.info(
+        "clean_ted_normalize_cpv: %d rows with valid cpv_code (%d had float repr)",
+        len(df),
+        float_count,
+    )
     return df
 
 
