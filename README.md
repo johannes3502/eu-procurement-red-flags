@@ -134,67 +134,81 @@ python src/download_data.py --force
 **Für die ersten Tests:** Ein Beispiel-TED-Jahr 2022 liegt vor unter `data/raw/ted/2022.csv`
 
 
+### 5. ETL-Cleanup-Pipeline ausführen
+
+Nach dem Download bereinigt die Pipeline alle Rohdaten, wendet die Red-Flag-Logik an, und exportiert das Ergebnis als **Parquet-Dateien** in `data/processed/`:
+
+```bash
+# Vollständige Pipeline (TED + CPI + WGI)
+python -m src.data_processing.run_cleanup
+
+# Nur bestimmte Jahre
+python -m src.data_processing.run_cleanup --years 2020 2021 2022
+
+# Mit Debug-Logging
+python -m src.data_processing.run_cleanup --log-level DEBUG
+```
+
+**Was passiert dabei?**
+
+| Schritt | Dataset | Funktion | Output |
+|---------|---------|----------|--------|
+| 1 | **TED** | `ted/clean.py` — 7 Reinigungsschritte + Red Flags | `data/processed/ted/ted_clean.parquet` |
+| 2 | **CPI** | `cpi/clean.py` — Filter auf Ziel-Länder + Umbenennung | `data/processed/cpi/cpi_clean.parquet` |
+| 3 | **WGI** | `wgi/clean.py` — Filter auf Ziel-Länder + Spaltenauswahl | `data/processed/wgi/wgi_clean.parquet` |
+
+Alle Logs landen in `logs/run_cleanup.log`.
+
 ---
 
 ## 📁 Projektstruktur
 
 ```
 red-flags-procurement-governance/
-├── project.md                    # 📌 Projektkonzept (Anforderungen, Datenquellen)
 ├── README.md                     # 👈 DU BIST HIER – Benutzerhandbuch
-├── TECHNICAL.md                  # 🔧 Technische Dokumentation
-├── exasol.md                     # Exasol-Datenbankdokumentation
-│
-├── src/download_data.py          # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
-├── src/test_redflags.py          # ✅ Red-Flag-Analyse & Tests
-├── src/data_processing/          # 🔄 Transformations-Module
-│   ├── lookup_countries.csv      # ISO-Länder-Mapping
-│   ├── profiling_utils.py        # 📊 Generic Data Profiling Utilities
-│   └── profile_raw_data.py       # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
-│
-├── src/                          # Quellcode-Architektur
-│   ├── data_aquisition/          # 📥 Datenquellen-Module
-│   │   ├── ted/                  # TED-Download & -Parsing
-│   │   ├── cpi/                  # CPI-Download & -Parsing
-│   │   └── wgi/                  # WGI-Download & -Parsing
-│   │
-│   ├── data_processing/          # 🔄 Transformations-Module
-│   │   ├── lookup_countries.csv  # ISO-Länder-Mapping
-│   │   ├── profiling_utils.py    # 📊 Generic Data Profiling Utilities
-│   │   └── profile_raw_data.py   # 📊 Data Profiling Orchestrator (CPI/WGI/TED)
-│   │
-│   ├── dw/                       # 🏢 Data Warehouse (Sternschema)
-│   │   └── [Geplant: DDL, Loader, Views]
-│   │
-│   ├── log/                      # 📝 Logging
-│   │   ├── __init__.py
-│   │   └── logger.py             # Zentrale Logging-Funktion
-│   │
-│   └── utils/                    # 🛠️ Hilfsfunktionen
-│       └── [Geplant: Utility-Module]
-│
 ├── doc/                          # 📚 Dokumentation
-│   ├── doc.md                    # Technische Dokumentation
 │   ├── project.md                # Projektkonzept
+│   ├── doc.md                    # Technische Dokumentation
 │   ├── profiling/                # 📊 Data Profiling Reports (auto-generiert)
-│   │   ├── profile_cpi_*.md      # CPI Profiling Report
-│   │   ├── profile_wgi_*.md      # WGI Profiling Report
-│   │   └── profile_ted_*_*.md    # TED Profiling Reports (pro Jahr)
-│   └── profiling_script_plan.md  # Planungsdokument für das Profiling-Script
+│   └── ...
+│
+├── src/                          # Quellcode
+│   ├── download_data.py          # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
+│   ├── test_redflags.py          # ✅ Red-Flag-Prototyp
+│   ├── data_aquisition/          # 📥 Datenquellen-Module
+│   │   ├── ted/download.py
+│   │   ├── cpi/download.py
+│   │   └── wgi/download.py
+│   ├── data_processing/          # 🔄 ETL-Transform
+│   │   ├── config.py             # Pfade, Thresholds, Spaltenlisten
+│   │   ├── utils.py              # Shared: Country-Lookup, TED-Loader, p95, Export
+│   │   ├── run_cleanup.py        # CLI-Orchestrierung (──years,──ted-input-dir, …)
+│   │   ├── ted/clean.py          # TED-spezifisch: clean_ted_*() (7 Fns) + compute_red_flags()
+│   │   ├── cpi/clean.py          # CPI-spezifisch: clean_cpi()
+│   │   ├── wgi/clean.py          # WGI-spezifisch: clean_wgi()
+│   │   ├── profiling/            # 📊 Data Profiling
+│   │   │   ├── profile_raw_data.py
+│   │   │   └── profiling_utils.py
+│   │   └── __init__.py
+│   ├── dw/                       # 🏢 Data Warehouse (geplant)
+│   ├── log/logger.py             # 📝 Logging
+│   └── utils/
 │
 ├── data/                         # 💾 Daten
-│   ├── raw/                      # Rohdaten (unverarbeitet)
-│   │   ├── ted/                  # TED-CSVs (pro Jahr)
-│   │   │   └── ted_2022.csv      # ✅ Beispiel-Datei
-│   │   ├── cpi/                  # CPI-CSVs
-│   │   └── wgi/                  # WGI-CSVs
-│   │
-│   └── processed/                # Verarbeitete Daten (DWH-ready)
-│       └── [Fact- & Dimension-CSVs nach Transform]
+│   ├── lookup/
+│   │   └── lookup_countries.csv  # ✅ Referenzdaten (versioniert via .gitignore-Exception)
+│   ├── raw/                      # Rohdaten (unverarbeitet, ignoriert)
+│   │   ├── ted/ted_<YYYY>.csv    # TED-CSVs (2014–2023)
+│   │   ├── cpi/cpi_raw.csv
+│   │   └── wgi/wgi_raw.csv
+│   └── processed/                # Verarbeitete Daten (ignoriert)
+│       ├── ted/ted_clean.parquet
+│       ├── cpi/cpi_clean.parquet
+│       └── wgi/wgi_clean.parquet
 │
-├── temp/                         # 📂 Temporäre Dateien & Zwischenergebnisse
 ├── logs/                         # 📊 Anwendungs-Logs
-└── tests/                        # ✅ Unit & Integration Tests
+├── temp/                         # 📂 Temporäre Dateien
+└── tests/
 ```
 
 ---
@@ -336,51 +350,43 @@ ORDER BY dc.cpi_score DESC;
 
 ---
 
-## 📊 Ausgabe & Analyseergebnisse
+## 📊 Ausgabe & Pipeline-Ergebnisse
 
 Nach der Pipeline-Verarbeitung entstehen:
 
-1. **CSV-Exports** (`data/processed/`)
-   - `fact_tender.csv` – Alle Vergabevorgänge mit Red Flags
-   - `dim_*.csv` – Dimensionstabellen
+1. **Parquet-Exports** (`data/processed/{ted,cpi,wgi}/*_clean.parquet`)
+   - TED: Bereinigt + Red-Flags
+   - CPI: Gefiltert + umbenannt
+   - WGI: Gefiltert + Spaltenauswahl
 
-2. **PowerPoint-Präsentation** (`presentation.pptx`)
-   - 12 Folien mit visuellen Ergebnissen
-
-3. **Logs** (`logs/application.log`)
-   - Detaillierte ETL-Schritte, Fehler, Performance-Metriken
+2. **Logs** (`logs/run_cleanup.log`)
+   - Detaillierte ETL-Schritte, Row-Counts, Flag-Frequenzen
 
 ---
 
-## 🛠️ Projektstruktur & Entwicklung
-
-### Momentaner Status
+## 🛠️ Projektstatus
 
 ✅ **Abgeschlossen:**
-- Projektkonzept (`project.md`)
-- Red-Flag-Berechnung (`src/test_redflags.py`)
-- Präsentationsgenerator (`create_presentation.py`)
-- Lookup-Tabelle (`src/data_processing/lookup_countries.csv`)
-- **Data Profiling** – Automatisierte Qualitätsanalyse aller Rohdaten ([`profiling_utils.py`](src/data_processing/profiling_utils.py) + [`profile_raw_data.py`](src/data_processing/profile_raw_data.py))
-
-🚧 **In Bearbeitung:**
-- Data Warehouse Schema (Sternschema-DDL)
-- ETL-Pipeline-Module (`src/data_aquisition/`, `src/data_processing/`)
-- DWH-Loader (`src/dw/`)
+- Datenherunterlad (Download-Skript für TED/CPI/WGI)
+- ETL-Core: Config + Utils + per-Dataset Clean-Submodule + Orchestrierung
+- Data Profiling (automatisierte Qualitätsanalyse)
+- Lookup-Tabelle (`data/lookup/lookup_countries.csv`)
 
 📋 **Geplant:**
+- Data Warehouse Schema (Sternschema-DDL)
+- Dimension Builder + Faktentabelle
+- DWH-Loader (`src/dw/`)
 - Exasol-Integration
 - Airflow-Automatisierung
 - Dashboard (Tableau/PowerBI)
-- ML-basierte Anomalieerkennung
 
 ---
 
 ## 📚 Weitere Dokumentation
 
-- **Detaillierte Projektanforderungen:** Siehe [project.md](project.md)
-- **Technische Implementation:** Siehe [TECHNICAL.md](TECHNICAL.md)
-- **Exasol-Setup:** Siehe [exasol.md](exasol.md)
+- **Projektkonzept:** [`project.md`](doc/project.md)
+- **Technische Dokumentation:** [`doc.md`](doc/doc.md)
+- **Data Warehouse Plan:** [`plans/data-preparation-for-warehouse.md`](../plans/data-preparation-for-warehouse.md)
 
 ---
 
@@ -389,24 +395,24 @@ Nach der Pipeline-Verarbeitung entstehen:
 | Quelle | Lizenz | URL |
 |--------|--------|-----|
 | TED (CSV) | CC BY 4.0 | https://data.europa.eu/data/datasets/ted-csv |
-| CPI | CC BY 4.0 | https://data.humdata.org/dataset/... |
-| WGI | CC BY 4.0 | https://www.worldbank.org/en/.../wgi |
+| CPI | CC BY 4.0 | https://data.humdata.org/ |
+| WGI | CC BY 4.0 | https://www.worldbank.org/en/publication/worldwide-governance-indicators |
 
 ---
 
 ## 💬 Häufig gestellte Fragen (FAQ)
 
-**F: Wie lange dauert die Datenverarbeitung?**
-> A: Für ein Jahr TED-Daten (4 Länder): ~5–10 Minuten auf Standard-Hardware. Full Load (10 Jahre): ~1 Stunde.
+**F: Wie starte ich die Cleanup-Pipeline?**
+> A: `python -m src.data_processing.run_cleanup` (nachdem `python src/download_data.py` die Rohdaten geholt hat).
 
-**F: Kann ich die Analyse nur auf ein Land beschränken?**
-> A: Ja! Bearbeite `src/data_processing/lookup_countries.csv` und entferne die nicht benötigten Länder.
+**F: Wie lange dauert die Verarbeitung?**
+> A: TED 10 Jahre (4 Länder): ~20–30 Minuten. CPI + WGI: <1 Minute.
 
-**F: Wie kann ich eine neue Red Flag hinzufügen?**
-> A: Füge in `src/test_redflags.py` eine neue Bedingung hinzu und berechne mit `.sum()` / `.apply()`.
+**F: Kann ich nur bestimmte Jahre verarbeiten?**
+> A: Ja, mit `--years 2020 2021 2022`.
 
-**F: Wo werden die Logs gespeichert?**
-> A: In `logs/application.log` und optional `logs/errors.log`.
+**F: Warum Parquet statt CSV?**
+> A: Parquet ist komprimierter (~80 % weniger Speicher), typ-sicherer und schneller im Laden. Siehe [`doc/doc.md`](doc/doc.md#52-transform-phase) für Details.
 
 **F: Kann ich die Pipeline automatisieren?**
 > A: Ja! Nutze Airflow oder einfache Cron-Jobs / Windows Task Scheduler.
@@ -420,30 +426,18 @@ Nach der Pipeline-Verarbeitung entstehen:
 pip list | grep -E "pandas|requests|pptx|wbgapi"
 ```
 
-### Tests ausführen
-```bash
-pytest tests/ -v
-```
-
 ### Logs anzeigen (live)
 ```bash
-tail -f logs/application.log       # Linux/Mac
-Get-Content logs/application.log -Tail 50 -Wait  # Windows PowerShell
+tail -f logs/run_cleanup.log                      # Linux/Mac
+Get-Content logs/run_cleanup.log -Tail 50 -Wait   # Windows PowerShell
 ```
 
-### Virtual Environment deaktivieren
+### Virtual Environment aktivieren/deaktivieren
 ```bash
-deactivate
+venv\Scripts\activate     # Windows
+source venv/bin/activate  # Linux/Mac
+deactivate                # deaktivieren
 ```
-
----
-
-## 📧 Support & Kontakt
-
-Bei Fragen oder Fehlern:
-1. Überprüfe [project.md](project.md) für Anforderungen
-2. Siehe [TECHNICAL.md](TECHNICAL.md) für technische Details
-3. Erstelle ein Issue auf GitHub
 
 ---
 
@@ -453,6 +447,6 @@ MIT License – Siehe LICENSE-Datei
 
 ---
 
-**Autor:** Johannes, OTH Regensburg  
-**Semester:** SoSe 2026  
-**Fach:** Data Warehouse Projekt 
+**Autor:** Johannes, OTH Regensburg
+**Semester:** SoSe 2026
+**Fach:** Data Warehouse Projekt

@@ -445,78 +445,43 @@ MultiIndex-DataFrame wird via Stack + Pivot in ein flaches Format umgewandelt
 
 ### 5.2 Transform-Phase
 
-**Zentrale Transformations-Logik (src/data_processing/transform.py):**
+Die Transform-Phase ist modular aufgebaut. Siehe [Layer-Architektur](#42-modulstruktur-layer-modell) für das Gesamtdesign.
 
-```python
-import pandas as pd
-from src.log.logger import get_logger
+**1. Laufende Module (jeweils `config.py` + `utils.py` + pro-Dataset-`clean.py`):**
 
-logger = get_logger(__name__)
+| Modul | Pfad | Verantwortung |
+|-------|------|--------------|
+| **Config** | [`config.py`](src/data_processing/config.py) | Single Source of Truth für alle Pfade, Thresholds, Spaltenlisten |
+| **Utils** | [`utils.py`](src/data_processing/utils.py) | Shared: Country-Lookup, TED-CSV-Load, p95, Parquet-Export |
+| **TED-Clean** | [`ted/clean.py`](src/data_processing/ted/clean.py) | 7 Reinigungsschritte + compute_red_flags() |
+| **CPI-Clean** | [`cpi/clean.py`](src/data_processing/cpi/clean.py) | clean_cpi() — Filter + Rename |
+| **WGI-Clean** | [`wgi/clean.py`](src/data_processing/wgi/clean.py) | clean_wgi() — Filter + Select |
+| **Orchestrierung** | [`run_cleanup.py`](src/data_processing/run_cleanup.py) | CLI-Orchestrierung: `--years`, `--output-dir`, … |
 
-def clean_ted_data(df):
-    """Bereinigung der TED-Rohdaten"""
-    logger.info(f"Input: {len(df)} Zeilen")
-    
-    # Duplikate entfernen
-    df = df.drop_duplicates(subset=['ID_NOTICE_CAN', 'ID_LOT'])
-    logger.info(f"Nach Duplikat-Entfernung: {len(df)} Zeilen")
-    
-    # Numerische Spalten konvertieren
-    df['AWARD_VALUE_EURO'] = pd.to_numeric(df['AWARD_VALUE_EURO'], errors='coerce')
-    df['VALUE_EURO'] = pd.to_numeric(df['VALUE_EURO'], errors='coerce')
-    df['NUMBER_OFFERS'] = pd.to_numeric(df['NUMBER_OFFERS'], errors='coerce')
-    
-    # Nulls ersetzen oder flaggen
-    df['NUMBER_OFFERS'].fillna(0, inplace=True)
-    
-    return df
+**2. TED-Pipeline (in [`run_cleanup.run_ted_pipeline()`](src/data_processing/run_cleanup.py)):**
 
-def calculate_red_flags(df):
-    """Berechnung aller 8 Red Flags"""
-    # Flags 1-7 (zeilenbasiert)
-    df['flag_1_single_bidder'] = (df['NUMBER_OFFERS'] == 1).astype(int)
-    df['flag_2_non_open'] = (df['TOP_TYPE'] != "OPE").astype(int)
-    df['flag_3_no_prior_call'] = (df['TOP_TYPE'].isin(['NIC', 'AWP'])).astype(int)
-    df['flag_4_accelerated'] = (df['B_ACCELERATED'] == "Y").astype(int)
-    df['flag_5_award_group'] = (df['B_AWARDED_TO_A_GROUP'] == "Y").astype(int)
-    
-    # Flag 6: High Value / Low Bidders
-    high_value_threshold = df['AWARD_VALUE_EURO'].quantile(0.75)
-    df['flag_6_high_value_low_bidders'] = (
-        (df['AWARD_VALUE_EURO'] >= high_value_threshold) & 
-        (df['NUMBER_OFFERS'] <= 2)
-    ).astype(int)
-    
-    # Flag 7: Tax Haven Winner
-    tax_havens = ['KY', 'BM', 'VG', 'BS', 'BB', 'SC', 'MU', 'CH']
-    df['flag_7_tax_haven'] = (df['WIN_COUNTRY_CODE'].isin(tax_havens)).astype(int)
-    
-    # Flag 8 (Notice-basiert, separat berechnet)
-    # wird später via Groupby hinzugefügt
-    
-    return df
+Die Pipeline durchläuft 8 Schritte in Reihenfolge:
 
-def calculate_combinations(df):
-    """Berechnung der 4 Kern-Kombinationen"""
-    df['comb_1_single_bidder_non_open'] = (
-        (df['flag_1_single_bidder'] == 1) & (df['flag_2_non_open'] == 1)
-    ).astype(int)
-    
-    df['comb_2_no_prior_call_hvlb'] = (
-        (df['flag_3_no_prior_call'] == 1) & (df['flag_6_high_value_low_bidders'] == 1)
-    ).astype(int)
-    
-    df['comb_3_accelerated_non_open_sb'] = (
-        (df['flag_4_accelerated'] == 1) & 
-        (df['flag_2_non_open'] == 1) & 
-        (df['flag_1_single_bidder'] == 1)
-    ).astype(int)
-    
-    return df
+1. **Laden** — `utils.load_ted_csvs(years, cols)` lädt per-year CSVs aus `data/raw/ted/ted_<YYYY>.csv` und konkateniert sie
+2. **Länderfilter** — `ted_clean.clean_ted_filter_countries(df)` reduziert auf DE, DK, RO, HU
+3. **Dedup** — `ted_clean.clean_ted_dedup(df)` CORRECTIONS-bewusste Deduplizierung
+4. **Wert-Clipping** — `ted_clean.clean_ted_clip_values(df, clip_pct=95)` Sentinel-Entfernung + per-year p95-Clip
+5. **Winner-Parse** — `ted_clean.clean_ted_parse_winner(df)` Multi-Value `WIN_COUNTRY_CODE` parsen
+6. **CPV-Normalisierung** — `ted_clean.clean_ted_normalize_cpv(df)` Zero-Pad auf 8 Digits
+7. **Spaltenauswahl** — `ted_clean.clean_ted_select_columns(df)` auf 15 Kernspalten
+8. **Red Flags** — `ted_clean.compute_red_flags(df)` berechnet F1–F7 + Kombinationen
 
-def add_crisis_dimension(df):
-    """Erweitere Zeitleiste mit Krisen-Dimension"""
-    def get_crisis_type(year):
+**3. CPI/WGI-Pipelines** — jeweils Laden → clean → export (deutlich kürzer als TED).
+
+**4. Ausgabe:** Drei Parquet-Dateien in per-Dataset-Subordnern:
+- `data/processed/ted/ted_clean.parquet`
+- `data/processed/cpi/cpi_clean.parquet`
+- `data/processed/wgi/wgi_clean.parquet`
+
+**5. Aufruf:**
+```bash
+python -m src.data_processing.run_cleanup
+```
         if 2020 <= year <= 2021:
             return "COVID-19"
         elif year >= 2022:
@@ -889,12 +854,14 @@ pip install -r requirements.txt
 ### 11.2 Pipeline-Ausführung
 
 ```bash
-# Manuelle Ausführung (aktuell)
-python src/data_aquisition/ted/fetch_ted.py
-python src/data_aquisition/cpi/fetch_cpi.py
-python src/data_aquisition/wgi/fetch_wgi.py
-python src/data_processing/transform.py
-python src/dw/load.py
+# 1. Rohdaten herunterladen
+python src/download_data.py
+
+# 2. ETL-Cleanup-Pipeline (bereinigen + Red Flags + Parquet-Export)
+python -m src.data_processing.run_cleanup
+
+# 3. Mit Optionen (z.B. bestimmte Jahre, Debug-Logging)
+python -m src.data_processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 
 # Zukünftig: Airflow DAG
 airflow dags list
