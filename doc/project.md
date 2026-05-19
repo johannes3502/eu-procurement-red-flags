@@ -87,13 +87,14 @@ Nach Mapping auf ISO Alpha‑2 und Integration in die Länderdimension werden si
 
 ---
 
-## 7. Größe (aktualisiert durch Deep-Dive Profiling)
+## 7. Größe (aktualisiert durch Profiling und Exasol-Load)
 
 - **TED global:** ~8,5 Mio. Zeilen
 - **TED (4 Länder, 2014–2023):** **2.207.161 Zeilen** (DE, DK, RO, HU) – exakt quantifiziert
 - **Nach Dedup** (ID_AWARD als PK, CORRECTIONS-aware): Reduktion um 2–38 % je Jahr
-- **Nach Spaltenreduktion:** 15 von 75 Spalten verbleiben, ca. **200–300 MB** in Exasol erwartet
-- **CPI + WGI:** zusammen wenige Tausend Zeilen (< 1 MB), 0 % missing
+- **Nach ETL (25 Spalten inkl. Red Flags):** **1.784.558 Zeilen** geladen in Exasol, **28,42 MB** (ted_clean.parquet)
+- **CPI + WGI:** je 40 Zeilen (< 1 MB), 0 % missing
+- **Gesamtschema in Exasol:** **28,43 MB** (Parquet-Quelle), davon 1.784.558 Zeilen in `stg_ted`
 
 ---
 
@@ -273,16 +274,14 @@ Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.m
 | 4 Deep‑Dive‑Analysen (Dedup, Monetary, Country, Flags) | ✅ Abgeschlossen |
 | Red‑Flag‑Definitionen (final, datengestützt) | ✅ Abgeschlossen |
 | Data Preparation Plan (vollständige ETL-Spezifikation) | ✅ Abgeschlossen |
-| **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ **Abgeschlossen** — Config → Utils → per‑dataset Cleanup-Submodule → Orchestrierung |
-| **Dimension Builder + fact_tender** | 📋 Geplant |
-| **Exasol DDL & Load** | 📋 Geplant |
+| **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ Abgeschlossen |
+| **Exasol DDL + Automation** (`setup_and_load.py` — DDL, Parquet-Load, INSERTs, Verify) | ✅ Abgeschlossen — alle 7 Tabellen erstellt, 1.784.558 TED-Zeilen + CPI/WGI geladen, 2 Beispielzeilen pro Star-Schema-Tabelle |
 | Analyse-Queries & Visualisierung | 📋 Geplant |
 
-**Nächste Schritte (Phase 3):**
-- Dimension Builder (4 Module: Zeit, Land (SCD 2), CPV, Verfahrenstyp)
-- `build_fact_tender.py` (Faktentabelle mit Surrogat-Keys)
-- Exasol DDL (`CREATE TABLE`) und `load_to_exasol.py`
-- Beispielzeilen für Exercise 2, Question 4
+**Nächste Schritte:**
+- Beispiel-Queries entwickeln (5 natürlichsprachige Queries liegen vor, siehe §10)
+- Visualisierung in Tableau/Power BI/Superset
+- ggf. Vergleich mit zusätzlichen Ländern oder Jahren
 
 ---
 

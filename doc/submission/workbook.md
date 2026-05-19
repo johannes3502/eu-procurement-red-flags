@@ -1,10 +1,9 @@
 # Challenge 3: Data Modelling and Importing the Data
 
-**Name:** Johannes, OTH Regensburg
+**Name:** Johannes Ramser
+**Matr.Nr.:** [redacted]
 
 ---
-
-## Title
 
 Mehrdimensionale Analyse von Auffälligkeiten in EU-Vergabedaten (TED)
 mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
@@ -16,20 +15,14 @@ mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
 *`CREATE TABLE` commands for the staging area — 1:1 mirrors of the cleaned parquet files. (Exercise Sheet 3, Exercise 1.3)*
 
 ```sql
--- ============================================================================
--- stg_ted — 1:1 mirror of ted_clean.parquet (25 columns: 15 base + 10 flags)
--- ============================================================================
--- The ETL pipeline adds 10 red-flag columns AFTER column selection.
--- Flags are pre-computed in the Python pipeline and imported as-is.
--- ============================================================================
 CREATE TABLE stg_ted (
     ID_AWARD           VARCHAR(100),
     ID_NOTICE_CAN      VARCHAR(100),
     ID_LOT             VARCHAR(100),
-    YEAR               SMALLINT,
+    "YEAR"             SMALLINT,
     ISO_COUNTRY_CODE   CHAR(2),
     winner_country     CHAR(2),
-    winner_country_raw VARCHAR(100),
+    winner_country_raw VARCHAR(500),
     AWARD_VALUE_EURO   DECIMAL(18,2),
     VALUE_EURO         DECIMAL(18,2),
     NUMBER_OFFERS      SMALLINT,
@@ -38,7 +31,6 @@ CREATE TABLE stg_ted (
     LOTS_NUMBER        INTEGER,
     NUMBER_AWARDS      INTEGER,
     cpv_code           CHAR(8),
-    -- Red Flags (pre-computed by ETL)
     F1                              BOOLEAN,
     F2                              BOOLEAN,
     F3                              BOOLEAN,
@@ -55,7 +47,7 @@ CREATE TABLE stg_ted (
 ```sql
 CREATE TABLE stg_cpi (
     country_iso3  CHAR(3),
-    year          SMALLINT,
+    "YEAR"        SMALLINT,
     cpi_score     SMALLINT
 );
 ```
@@ -63,7 +55,7 @@ CREATE TABLE stg_cpi (
 ```sql
 CREATE TABLE stg_wgi (
     country_iso3            CHAR(3),
-    year                    SMALLINT,
+    "YEAR"                  SMALLINT,
     control_of_corruption   DECIMAL(5,2),
     government_effectiveness DECIMAL(5,2),
     political_stability     DECIMAL(5,2),
@@ -164,7 +156,7 @@ CREATE TABLE fact_tender (
     award_id           VARCHAR(100)     NOT NULL,
     id_notice_can      VARCHAR(100),
     id_lot             VARCHAR(100),
-    year               SMALLINT         NOT NULL,
+    "year"              SMALLINT         NOT NULL,
     crisis_type        VARCHAR(50),
     country_key        INTEGER,
     winner_country_key INTEGER,
@@ -304,12 +296,19 @@ ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
 
 ## Numbers
 
-* Number of rows in your biggest table: **1,784,558**
-* Size (KB, MB, or GB) of your biggest table: **29,103 KB (28.42 MB)**
-* Name of that biggest table: **fact_tender**
-* Total size of your schema: **29,113 KB (28.43 MB)**
+| Table | Rows | Parquet (Snappy) | Exasol RAW (Nutzdaten) | Exasol MEM (mit Overhead) |
+|-------|------|-----------------|------------------------|--------------------------|
+| `stg_ted` | 1,784,558 | 28.42 MB | 151.44 MB | 65.27 MB |
+| `stg_cpi` | 40 | < 0.01 MB | 440 B | 13.6 KB |
+| `stg_wgi` | 40 | < 0.01 MB | 1.0 KB | 30.8 KB |
+| `dim_country` | 2 | — | 94 B | 48.1 KB |
+| `dim_cpv` | 2 | — | 50 B | 30.8 KB |
+| `dim_procedure_type` | 2 | — | 75 B | 23.9 KB |
+| `fact_tender` | 2 | — | 261 B | 95.9 KB |
+| **Gesamt** | **1,784,642** | **~28.43 MB** | **~151.44 MB** | **~65.50 MB** |
 
-*(Measured from `ted_clean.parquet` + `cpi_clean.parquet` + `wgi_clean.parquet` on disk.)*
+- **Biggest table (rows + size):** `stg_ted` (1,784,558 rows, 28.42 MB Parquet / 151.44 MB Exasol RAW)
+- **Biggest star-schema table:** `fact_tender` (2 example rows, < 1 MB)
 
 ---
 
