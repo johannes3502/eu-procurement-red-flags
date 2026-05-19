@@ -134,6 +134,8 @@ CREATE TABLE stg_wgi (
 | `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exact** — identical name, type, and range |
 | *(no WGI dimensions in TED)* | 6× WGI scores (DECIMAL(5,2)) | **New attributes** — only in WGI, joined on (country, year) |
 
+> **Externer Lookup:** Die Datei [`lookup_countries.csv`](../../data/lookup/lookup_countries.csv) (4 Zeilen, `alpha_2` ↔ `alpha_3` ↔ `country_name`) wird im Python-ETL geladen und dient als Mapping-Hilfe für den TED-Länderfilter, den CPI/WGI-Join und die Country-Names in `dim_country`. Sie wird **nicht** als separate Staging-Tabelle in Exasol importiert.
+
 ### CPI → WGI Schema Matching
 
 | CPI Attribute | WGI Attribute | Match Type |
