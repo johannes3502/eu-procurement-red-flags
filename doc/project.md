@@ -247,7 +247,7 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 |---------|-----------|----------|
 | Data Profiling (Datenqualität) | `data_processing/profiling/profile_raw_data.py` | NULL-Raten, Wertebereiche, Spaltenabdeckung pro Jahr |
 | Deep‑Dive 1: Dedup & Granularität | `profiling/analysis_1_dedup.py` | **ID_AWARD als Fact-PK**; CORRECTIONS-aware Dedup-Strategie |
-| Deep‑Dive 2: Extreme Geldwerte | `profiling/analysis_2_monetary.py` | Sentinel-Entfernung (€10 B.), per‑year‑p99‑Clipping (~€9–26 M) |
+| Deep‑Dive 2: Extreme Geldwerte | `profiling/analysis_2_monetary.py` | Sentinel-Entfernung (€10 B.), kein Clipping — echte Werte unverändert |
 | Deep‑Dive 3: WIN_COUNTRY_CODE | `profiling/analysis_3_country_codes.py` | **Any‑Segment‑Parser** für 88.744 mehrwertige Codes (98,63 % Coverage) |
 | Deep‑Dive 4: Red‑Flag‑Machbarkeit | `profiling/analysis_4_red_flags.py` | **F4 gestrichen**, F5 ab 2016, F6 mit per‑year‑p95 |
 | Schwachstellenanalyse | manuell (Architekt) | **F2 10.0**, **F3 NIC/AWP**, **F6 ==1** final verifiziert |
