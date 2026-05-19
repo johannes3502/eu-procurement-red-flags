@@ -8,10 +8,11 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- stg_ted — 1:1 mirror of ted_clean.parquet (15 columns)
+-- stg_ted — 1:1 mirror of ted_clean.parquet (25 columns: 15 base + 10 flags)
 -- ----------------------------------------------------------------------------
--- All columns match config.TED_KEEP_COLUMNS exactly.
--- Types from config.EXASOL_TYPE_MAP.
+-- The ETL pipeline adds 10 red-flag columns AFTER column selection
+-- (see run_cleanup.py: clean_ted_select_columns → compute_red_flags).
+-- All columns match config.TED_KEEP_COLUMNS + config.EXASOL_TYPE_MAP flags.
 -- ----------------------------------------------------------------------------
 CREATE TABLE stg_ted (
     ID_AWARD           VARCHAR(100),
@@ -28,7 +29,18 @@ CREATE TABLE stg_ted (
     TOP_TYPE           VARCHAR(10),
     LOTS_NUMBER        INTEGER,
     NUMBER_AWARDS      INTEGER,
-    cpv_code           CHAR(8)
+    cpv_code           CHAR(8),
+    -- Red Flags (added by compute_red_flags() after column selection)
+    F1                              BOOLEAN,
+    F2                              BOOLEAN,
+    F3                              BOOLEAN,
+    F5                              BOOLEAN,
+    F6                              BOOLEAN,
+    F7                              BOOLEAN,
+    comb_single_discrepancy         BOOLEAN,
+    comb_single_non_open            BOOLEAN,
+    comb_no_call_high_value         BOOLEAN,
+    comb_frag_single                BOOLEAN
 );
 
 -- ----------------------------------------------------------------------------

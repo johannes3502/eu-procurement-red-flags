@@ -17,7 +17,10 @@ mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
 
 ```sql
 -- ============================================================================
--- stg_ted — 1:1 mirror of ted_clean.parquet (15 columns)
+-- stg_ted — 1:1 mirror of ted_clean.parquet (25 columns: 15 base + 10 flags)
+-- ============================================================================
+-- The ETL pipeline adds 10 red-flag columns AFTER column selection.
+-- Flags are pre-computed in the Python pipeline and imported as-is.
 -- ============================================================================
 CREATE TABLE stg_ted (
     ID_AWARD           VARCHAR(100),
@@ -34,14 +37,22 @@ CREATE TABLE stg_ted (
     TOP_TYPE           VARCHAR(10),
     LOTS_NUMBER        INTEGER,
     NUMBER_AWARDS      INTEGER,
-    cpv_code           CHAR(8)
+    cpv_code           CHAR(8),
+    -- Red Flags (pre-computed by ETL)
+    F1                              BOOLEAN,
+    F2                              BOOLEAN,
+    F3                              BOOLEAN,
+    F5                              BOOLEAN,
+    F6                              BOOLEAN,
+    F7                              BOOLEAN,
+    comb_single_discrepancy         BOOLEAN,
+    comb_single_non_open            BOOLEAN,
+    comb_no_call_high_value         BOOLEAN,
+    comb_frag_single                BOOLEAN
 );
 ```
 
 ```sql
--- ============================================================================
--- stg_cpi — 1:1 mirror of cpi_clean.parquet (3 columns)
--- ============================================================================
 CREATE TABLE stg_cpi (
     country_iso3  CHAR(3),
     year          SMALLINT,
@@ -50,9 +61,6 @@ CREATE TABLE stg_cpi (
 ```
 
 ```sql
--- ============================================================================
--- stg_wgi — 1:1 mirror of wgi_clean.parquet (8 columns)
--- ============================================================================
 CREATE TABLE stg_wgi (
     country_iso3            CHAR(3),
     year                    SMALLINT,
@@ -75,51 +83,71 @@ CREATE TABLE stg_wgi (
 
 | Aspect | TED | CPI | WGI |
 |--------|-----|-----|-----|
-| Source format | CSV (75 columns raw → 15 kept) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
+| Source format | CSV (75 columns raw → 15 kept + 10 flags) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
 | Row count | ~1.78 Mio. (after dedup) | 40 (4 countries × 10 years) | 40 (4 countries × 10 years) |
 | Granularity | Per award (`ID_AWARD`) | Per country-year | Per country-year |
 | Key columns | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |
 
 > **Example:** TED delivers 1.78 million rows at award granularity, CPI/WGI each deliver 40 rows at country-year granularity. Joining requires SCD Type 2 on the country dimension — governance data is replicated across all awards of the same country-year combination.
 
----
-
 ### 2. Semantic Heterogeneity (Country Codes)
 
-- **TED:** Uses ISO Alpha-2 codes directly in the source CSV: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
+- **TED:** Uses ISO Alpha-2 codes: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
 - **CPI/WGI:** Uses ISO Alpha-3 codes: `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
 
-> **Example:** Without mapping, `SELECT … WHERE country = 'DE'` would match TED rows but miss CPI/WGI rows. Resolution: `lookup_countries.csv` provides bidirectional mapping (alpha_2 ↔ alpha_3), applied during dimension building.
-
----
+> **Example:** Without mapping, `SELECT … WHERE country = 'DE'` would match TED rows but miss CPI/WGI rows. Resolution: `lookup_countries.csv` provides bidirectional mapping.
 
 ### 3. Temporal Heterogeneity
 
-- **TED:** Column `YEAR` (SMALLINT, 2014–2023). Award date from `DT_AWARD` is available but not imported — only the year is used.
-- **CPI/WGI:** Column `year` (SMALLINT, 2014–2023). Published annually; no sub-year resolution exists.
+- **TED:** Column `YEAR` (SMALLINT, 2014–2023). Award date from `DT_AWARD` is available but not imported.
+- **CPI/WGI:** Column `year` (SMALLINT, 2014–2023). Published annually; no sub-year resolution.
 
-> **Example:** TED has multiple awards per country-year (e.g., 399,352 rows for 2021 alone), while CPI/WGI have exactly one row per country-year. For analysis, governance scores must be replicated across all TED rows of the same country-year via the SCD Type 2 country dimension.
-
----
+> **Example:** TED has 399,352 rows for 2021 alone, while CPI/WGI have one row per country-year. Governance scores are replicated via SCD Type 2.
 
 ### 4. Value Range Heterogeneity
 
-- **TED measures:** `AWARD_VALUE_EURO` in Euro (0 to billions), `NUMBER_OFFERS` (0–999), Red Flag booleans
-- **CPI:** `cpi_score` (SMALLINT, 0–100) — higher = less corruption
-- **WGI:** 6 dimensions (DECIMAL(5,2), ~[-2.5, +2.5]) — higher = better governance
+- **TED measures:** Euro amounts (0 to billions), counts (0–999), booleans
+- **CPI:** `cpi_score` (0–100) — higher = less corruption
+- **WGI:** 6 dimensions ([-2.5, +2.5]) — higher = better governance
 
-> **Example:** Aggregating `AVG(cpi_score)` and `AVG(F1)` in the same query requires awareness: `cpi_score` is a STOCK attribute (one value per country-year), while `F1` is a VPU measure computed per award. The SQL must handle these different aggregation types differently — CPI needs `AVG`, F1 needs `SUM(CAST(F1 AS INT)) / COUNT(*)`.
+> **Example:** `AVG(cpi_score)` and `SUM(CAST(F1 AS INT))/COUNT(*)` require different aggregation strategies.
 
 ---
 
-### Summary
+## Schema Matching
 
-| Heterogeneity Type | TED | CPI/WGI | Resolution |
-|--------------------|-----|---------|------------|
-| Schema | 15 columns, award granularity | 3–8 columns, country‑year granularity | SCD Type 2 dimension |
-| Semantic (countries) | Alpha‑2 (`DE`) | Alpha‑3 (`DEU`) | `lookup_countries.csv` |
-| Temporal | Year only, many rows/year | Year only, one row/year | JOIN via `dim_country` |
-| Value range | EUR / counts / booleans | 0–100 / [-2.5, +2.5] | Separate aggregation strategies |
+*Which attributes from TED correspond with which attributes from CPI/WGI? (Exercise Sheet 3, Exercise 1.5)*
+
+### TED → CPI Schema Matching
+
+| TED Attribute | CPI Attribute | Match Type |
+|---------------|---------------|------------|
+| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantic** — different encoding, resolved via `lookup_countries.csv` |
+| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exact** — identical name, type, and range |
+| *(no CPI score in TED)* | `cpi_score` (SMALLINT, 0–100) | **New attribute** — only in CPI, joined on (country, year) |
+
+### TED → WGI Schema Matching
+
+| TED Attribute | WGI Attribute | Match Type |
+|---------------|---------------|------------|
+| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantic** — resolved via lookup table |
+| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exact** — identical name, type, and range |
+| *(no WGI dimensions in TED)* | 6× WGI scores (DECIMAL(5,2)) | **New attributes** — only in WGI, joined on (country, year) |
+
+### CPI → WGI Schema Matching
+
+| CPI Attribute | WGI Attribute | Match Type |
+|---------------|---------------|------------|
+| `country_iso3` (CHAR(3)) | `country_iso3` (CHAR(3)) | **Exact** — identical name, type, and encoding |
+| `year` (SMALLINT) | `year` (SMALLINT) | **Exact** — identical name, type, and range |
+| *(different scores)* | *(6 governance dimensions)* | **Related** — both measure governance quality, but at different granularity (CPI: single corruption perception score; WGI: six multi-dimensional indicators) |
+
+### Integrated Schema Decision
+
+The three sources are integrated via a **star schema**:
+- CPI + WGI are merged on (country_iso3, year) and stored as SCD Type 2 attributes in `dim_country`
+- TED data populates `fact_tender` with foreign keys to `dim_country`, `dim_cpv`, `dim_procedure_type`
+- Red flags are pre-computed in the Python ETL pipeline and stored directly in `fact_tender`
 
 ---
 
@@ -164,14 +192,13 @@ CREATE TABLE fact_tender (
 ```
 
 - **One row per `ID_AWARD`** (CORRECTIONS-aware dedup). `ID_NOTICE_CAN` and `ID_LOT` as degenerate dimensions.
-- **Role-Playing:** `dim_country` referenced twice — `country_key` (Auftraggeber-Land = `ISO_COUNTRY_CODE`), `winner_country_key` (Gewinner-Land = parsed `WIN_COUNTRY_CODE`).
+- **Role-Playing:** `dim_country` referenced twice — `country_key` (Auftraggeber-Land), `winner_country_key` (Gewinner-Land).
 - **Red Flags:** 6 single flags (F1–F3, F5–F7) + 4 combinations. F4 dropped (99.16% NULL).
 - **AWARD_VALUE_EURO:** Sentinel removal (€10T → NaN) only — no percentile clipping.
 
 ### Dimension tables
 
 ```sql
--- dim_country — SCD Type 2 with governance scores
 CREATE TABLE dim_country (
     country_key        INTEGER IDENTITY NOT NULL,
     country_code       CHAR(2)          NOT NULL,
@@ -187,10 +214,7 @@ CREATE TABLE dim_country (
     valid_to_year      SMALLINT         NOT NULL,
     PRIMARY KEY (country_key)
 );
-```
 
-```sql
--- dim_cpv — CPV classification hierarchy (denormalised)
 CREATE TABLE dim_cpv (
     cpv_key        INTEGER IDENTITY NOT NULL,
     cpv_code       CHAR(8)          NOT NULL,
@@ -199,10 +223,7 @@ CREATE TABLE dim_cpv (
     cpv_class      VARCHAR(4),
     PRIMARY KEY (cpv_key)
 );
-```
 
-```sql
--- dim_procedure_type — award procedure metadata
 CREATE TABLE dim_procedure_type (
     procedure_key      INTEGER IDENTITY NOT NULL,
     procedure_code     VARCHAR(20)      NOT NULL,
@@ -219,6 +240,18 @@ CREATE TABLE dim_procedure_type (
 
 *`IMPORT` commands to load data from cleaned CSV files into staging tables. (Exercise Sheet 3, Exercise 2.1)*
 
+**Source file properties (inspected via Notepad++ and hex viewer):**
+
+| Property | TED CSV | CPI CSV | WGI CSV |
+|----------|---------|---------|---------|
+| Encoding | UTF-8 (no BOM) | UTF-8 (no BOM) | UTF-8 (no BOM) |
+| Line ending | LF (Unix) | LF (Unix) | LF (Unix) |
+| Column separator | `,` (comma) | `,` (comma) | `,` (comma) |
+| String delimiter | `"` (double quote) | `"` (double quote) | `"` (double quote) |
+| Header row | Yes (first line) | Yes (first line) | Yes (first line) |
+| Decimal mark | `.` (point) | — (integers) | `.` (point) |
+| Thousands separator | None | None | None |
+
 **Prerequisite:** One-time CSV export from parquet (Python):
 ```python
 import pandas as pd
@@ -228,32 +261,41 @@ pd.read_parquet('data/processed/wgi/wgi_clean.parquet').to_csv('data/processed/w
 ```
 
 ```sql
--- IMPORT stg_ted — ~1.78M rows, ~28 MB CSV
+-- IMPORT stg_ted (25 columns: 15 base + 10 flags)
+DROP TABLE IF EXISTS error_tbl;
+
 IMPORT INTO stg_ted
 FROM LOCAL CSV FILE 'data/processed/ted/ted_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
-SKIP = 1;
+SKIP = 1
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
 
--- IMPORT stg_cpi — 40 rows
+-- IMPORT stg_cpi (3 columns)
+DROP TABLE IF EXISTS error_tbl;
+
 IMPORT INTO stg_cpi
 FROM LOCAL CSV FILE 'data/processed/cpi/cpi_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
-SKIP = 1;
+SKIP = 1
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
 
--- IMPORT stg_wgi — 40 rows
+-- IMPORT stg_wgi (8 columns)
+DROP TABLE IF EXISTS error_tbl;
+
 IMPORT INTO stg_wgi
 FROM LOCAL CSV FILE 'data/processed/wgi/wgi_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
-SKIP = 1;
+SKIP = 1
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
 ```
 
 ---

@@ -25,7 +25,12 @@ LOG_DIR: Path = PROJECT_ROOT / "logs"
 YEARS: List[int] = list(range(2014, 2024))  # 2014–2023
 
 # ---------------------------------------------------------------------------
-# Columns after TED cleaning  (15 columns — F4 (B_ACCELERATED) is dropped)
+# Columns after TED cleaning + red flags  (25 columns — F4 (B_ACCELERATED) is dropped)
+# ---------------------------------------------------------------------------
+# NOTE: clean_ted_select_columns() keeps only the 15 base columns BELOW.
+#   compute_red_flags() then ADDS 10 flag columns (F1–F3, F5–F7 + 4 combos).
+#   The final parquet has 25 columns — both lists combined.
+#   The corresponding Exasol types for all 25 columns are in EXASOL_TYPE_MAP.
 # ---------------------------------------------------------------------------
 TED_KEEP_COLUMNS: List[str] = [
     "ID_AWARD",
