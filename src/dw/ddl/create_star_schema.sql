@@ -21,14 +21,14 @@ CREATE TABLE dim_country (
     country_key        INTEGER IDENTITY NOT NULL,
     country_code       CHAR(2)          NOT NULL,   -- ISO Alpha-2: DE, DK, RO, HU
     country_name       VARCHAR(100)     NOT NULL,
-    -- Governance scores (STOCK attributes — point-in-time, year-specific)
-    cpi_score          SMALLINT,                    -- 0–100
-    control_of_corruption      DECIMAL(5,2),
-    government_effectiveness   DECIMAL(5,2),
-    political_stability        DECIMAL(5,2),
-    rule_of_law                DECIMAL(5,2),
-    regulatory_quality         DECIMAL(5,2),
-    voice_accountability       DECIMAL(5,2),
+    -- Governance scores (STOCK attributes — point-in-time, year-specific; 0% NULL in source data)
+    cpi_score          SMALLINT         NOT NULL,  -- 0–100
+    control_of_corruption      DECIMAL(5,2) NOT NULL,
+    government_effectiveness   DECIMAL(5,2) NOT NULL,
+    political_stability        DECIMAL(5,2) NOT NULL,
+    rule_of_law                DECIMAL(5,2) NOT NULL,
+    regulatory_quality         DECIMAL(5,2) NOT NULL,
+    voice_accountability       DECIMAL(5,2) NOT NULL,
     -- SCD Type 2 validity period
     valid_from_year    SMALLINT         NOT NULL,
     valid_to_year      SMALLINT         NOT NULL,   -- 9999 = currently valid

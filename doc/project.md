@@ -64,7 +64,7 @@ Alle Quellen werden vollautomatisch durch das Skript `src/download_data.py` bezo
 | `number_offers` | Integer | Anzahl eingegangener Angebote |
 | `award_value_eur` | Decimal | Zuschlagswert in Euro (Sentinel €10T entfernt, kein Clipping) |
 | `estimated_value_eur` | Decimal | Geschätzter Auftragswert |
-| `is_accelerated` | Boolean | Beschleunigtes Verfahren – **gestrichen** (99,16 % NULL) |
+| `~~is_accelerated~~` | ~~Boolean~~ | ~~Beschleunigtes Verfahren~~ – **GESTRICHEN** (99,16 % NULL, nicht in Pipeline enthalten) |
 | `is_awarded_to_group` | Boolean | Zuschlag an Bietergemeinschaft |
 | `cpv_code` | String | Common Procurement Vocabulary |
 
