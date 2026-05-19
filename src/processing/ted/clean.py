@@ -17,8 +17,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from src.data_processing import config
-from src.data_processing import utils
+from src.processing import config
+from src.processing import utils
 
 logger = logging.getLogger(__name__)
 

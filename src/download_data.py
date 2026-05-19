@@ -49,9 +49,9 @@ logger = logging.getLogger("download_data")
 # ---------------------------------------------------------------------------
 # Module imports
 # ---------------------------------------------------------------------------
-from src.data_aquisition.ted.download import download_ted
-from src.data_aquisition.cpi.download import download_cpi
-from src.data_aquisition.wgi.download import download_wgi
+from src.acquisition.ted.download import download_ted
+from src.acquisition.cpi.download import download_cpi
+from src.acquisition.wgi.download import download_wgi
 
 # ---------------------------------------------------------------------------
 # Dataset registry

@@ -140,13 +140,13 @@ Nach dem Download bereinigt die Pipeline alle Rohdaten, wendet die Red-Flag-Logi
 
 ```bash
 # Vollständige Pipeline (TED + CPI + WGI)
-python -m src.data_processing.run_cleanup
+python -m src.processing.run_cleanup
 
 # Nur bestimmte Jahre
-python -m src.data_processing.run_cleanup --years 2020 2021 2022
+python -m src.processing.run_cleanup --years 2020 2021 2022
 
 # Mit Debug-Logging
-python -m src.data_processing.run_cleanup --log-level DEBUG
+python -m src.processing.run_cleanup --log-level DEBUG
 ```
 
 **Was passiert dabei?**
@@ -175,11 +175,11 @@ red-flags-procurement-governance/
 ├── src/                          # Quellcode
 │   ├── download_data.py          # 📥 Automatisierter Rohdaten-Download (TED/CPI/WGI)
 │   ├── test_redflags.py          # ✅ Red-Flag-Prototyp
-│   ├── data_aquisition/          # 📥 Datenquellen-Module
+│   ├── acquisition/              # 📥 Datenquellen-Module
 │   │   ├── ted/download.py
 │   │   ├── cpi/download.py
 │   │   └── wgi/download.py
-│   ├── data_processing/          # 🔄 ETL-Transform
+│   ├── processing/               # 🔄 ETL-Transform
 │   │   ├── config.py             # Pfade, Thresholds, Spaltenlisten
 │   │   ├── utils.py              # Shared: Country-Lookup, TED-Loader, p95, Export
 │   │   ├── run_cleanup.py        # CLI-Orchestrierung (──years,──ted-input-dir, …)
@@ -253,7 +253,7 @@ python create_presentation.py
 Extrahiert einen umfassenden **8‑Kategorien-Qualitätsreport** für alle Rohdaten (CPI, WGI, TED 2014–2023) als Markdown-Dateien:
 
 ```bash
-python src/data_processing/profile_raw_data.py
+python src/processing/profiling/profile_raw_data.py
 ```
 
 **Output:** Markdown-Reports in [`doc/profiling/`](doc/profiling/):

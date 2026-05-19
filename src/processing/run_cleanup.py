@@ -22,11 +22,11 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from src.data_processing import config
-from src.data_processing import utils
-from src.data_processing.cpi import clean as cpi_clean
-from src.data_processing.ted import clean as ted_clean
-from src.data_processing.wgi import clean as wgi_clean
+from src.processing import config
+from src.processing import utils
+from src.processing.cpi import clean as cpi_clean
+from src.processing.ted import clean as ted_clean
+from src.processing.wgi import clean as wgi_clean
 from src.log.logger import setup_logger
 
 logger = logging.getLogger(__name__)

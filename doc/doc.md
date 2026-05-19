@@ -31,7 +31,7 @@ red-flags-procurement-governance/
 ├── doc/
 │   ├── project.md              # Projektkonzept & Anforderungen
 │   ├── doc.md                  # Technische Dokumentation (dieses Doc)
-│   ├── exercise1/              # Exercise 1 / Challenge 2 Deliverables
+│   ├── data-model/             # Data Model Documents
 │   │   ├── mer_model.md        # ME/R Model (Mermaid)
 │   │   ├── measure_table.md    # Measure Table (FLOW/STOCK/VPU)
 │   │   └── snowflake_variant.md # Snowflake Variant + Star-vs-Snowflake
@@ -39,8 +39,8 @@ red-flags-procurement-governance/
 │       └── analysis/
 │           └── analysis_results.md
 ├── src/
-│   ├── data_aquisition/        # Datenquellen-Module (ted/cpi/wgi)
-│   ├── data_processing/        # Transformations-Module
+│   ├── acquisition/            # Datenquellen-Module (ted/cpi/wgi)
+│   ├── processing/             # Transformations-Module
 │   │   ├── config.py           # ETL-Config: Pfade, Thresholds, Spaltenlisten
 │   │   ├── utils.py            # Shared Utilities
 │   │   ├── ted/clean.py        # TED-spezifisch: 7 clean_ted_* + compute_red_flags()
@@ -235,7 +235,7 @@ WHERE ft.year BETWEEN 2014 AND 2023
 
 ### 5.2 Transform-Phase
 
-**TED-Pipeline (8 Schritte in [`run_cleanup.py`](src/data_processing/run_cleanup.py)):**
+**TED-Pipeline (8 Schritte in [`run_cleanup.py`](src/processing/run_cleanup.py)):**
 
 1. **Laden** — `utils.load_ted_csvs()` lädt per-year CSVs
 2. **Länderfilter** — `clean_ted_filter_countries()` → DE, DK, RO, HU
@@ -255,8 +255,8 @@ WHERE ft.year BETWEEN 2014 AND 2023
 
 **Aufruf:**
 ```bash
-python -m src.data_processing.run_cleanup
-python -m src.data_processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
+python -m src.processing.run_cleanup
+python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 ```
 
 ---
@@ -344,10 +344,10 @@ Die TED-Pipeline verarbeitet ~2,2 Mio. Zeilen über 8 Clean-Schritte. `del` + `g
 python src/download_data.py
 
 # 2. ETL-Cleanup-Pipeline
-python -m src.data_processing.run_cleanup
+python -m src.processing.run_cleanup
 
 # 3. Mit Optionen
-python -m src.data_processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
+python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 ```
 
 ---

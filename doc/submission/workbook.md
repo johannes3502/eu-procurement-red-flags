@@ -313,4 +313,4 @@ ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
 
 ## ME/R Model
 
-![ME/R Model](../exercise1/mer_model.png)
+![ME/R Model](../data-model/mer_model.png)

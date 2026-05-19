@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import pandas as pd
 
-from src.data_processing import config
+from src.processing import config
 
 # ---------------------------------------------------------------------------
 # Logger factory

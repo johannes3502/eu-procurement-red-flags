@@ -32,7 +32,7 @@ from src.log import setup_logger
 # ---------------------------------------------------------------------------
 # Import generic profiling utilities
 # ---------------------------------------------------------------------------
-from src.data_processing.profiling.profiling_utils import (
+from src.processing.profiling.profiling_utils import (
     compute_basic_info,
     compute_dtype_report,
     compute_missing_values,

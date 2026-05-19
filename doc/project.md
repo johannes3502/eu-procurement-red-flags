@@ -245,19 +245,19 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 
 | Analyse / Modul | Datei(en) | Ergebnis |
 |---------|-----------|----------|
-| Data Profiling (Datenqualität) | `data_processing/profiling/profile_raw_data.py` | NULL-Raten, Wertebereiche, Spaltenabdeckung pro Jahr |
+| Data Profiling (Datenqualität) | `src/processing/profiling/profile_raw_data.py` | NULL-Raten, Wertebereiche, Spaltenabdeckung pro Jahr |
 | Deep‑Dive 1: Dedup & Granularität | `profiling/analysis_1_dedup.py` | **ID_AWARD als Fact-PK**; CORRECTIONS-aware Dedup-Strategie |
 | Deep‑Dive 2: Extreme Geldwerte | `profiling/analysis_2_monetary.py` | Sentinel-Entfernung (€10 B.), kein Clipping — echte Werte unverändert |
 | Deep‑Dive 3: WIN_COUNTRY_CODE | `profiling/analysis_3_country_codes.py` | **Any‑Segment‑Parser** für 88.744 mehrwertige Codes (98,63 % Coverage) |
 | Deep‑Dive 4: Red‑Flag‑Machbarkeit | `profiling/analysis_4_red_flags.py` | **F4 gestrichen**, F5 ab 2016, F6 mit per‑year‑p95 |
 | Schwachstellenanalyse | manuell (Architekt) | **F2 10.0**, **F3 NIC/AWP**, **F6 ==1** final verifiziert |
 | Data Preparation Plan | `plans/data-preparation-for-warehouse.md` | Vollständige ETL-Spezifikation mit allen Regeln |
-| **ETL‑Config** (zentrale Konstanten) | `data_processing/config.py` | Pfade, Thresholds, Spaltenlisten, Exasol-Type-Map |
-| **Shared‑Utilities** (Wiederverwendbare Helfer) | `data_processing/utils.py` | Country-Lookup, TED-CSV-Loader, p95, Parquet-Export, Step-Logging |
-| **Cleanup‑Modul TED** | `data_processing/ted/clean.py` | 7 clean_ted_*() + compute_red_flags() |
-| **Cleanup‑Modul CPI** | `data_processing/cpi/clean.py` | clean_cpi() |
-| **Cleanup‑Modul WGI** | `data_processing/wgi/clean.py` | clean_wgi() |
-| **Orchestrierung** (alle Datensätze) | `data_processing/run_cleanup.py` | CLI‑Pipeline: --years, --ted-input-dir, --cpi-input, --wgi-input, --output-dir |
+| **ETL‑Config** (zentrale Konstanten) | `src/processing/config.py` | Pfade, Thresholds, Spaltenlisten, Exasol-Type-Map |
+| **Shared‑Utilities** (Wiederverwendbare Helfer) | `src/processing/utils.py` | Country-Lookup, TED-CSV-Loader, p95, Parquet-Export, Step-Logging |
+| **Cleanup‑Modul TED** | `src/processing/ted/clean.py` | 7 clean_ted_*() + compute_red_flags() |
+| **Cleanup‑Modul CPI** | `src/processing/cpi/clean.py` | clean_cpi() |
+| **Cleanup‑Modul WGI** | `src/processing/wgi/clean.py` | clean_wgi() |
+| **Orchestrierung** (alle Datensätze) | `src/processing/run_cleanup.py` | CLI‑Pipeline: --years, --ted-input-dir, --cpi-input, --wgi-input, --output-dir |
 
 Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.md`](red-flags-procurement-governance/doc/profiling/analysis/analysis_results.md).
 
