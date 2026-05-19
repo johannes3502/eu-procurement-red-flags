@@ -48,10 +48,9 @@ TED_KEEP_COLUMNS: List[str] = [
 # ---------------------------------------------------------------------------
 # Monetary thresholds
 # ---------------------------------------------------------------------------
-SENTINEL_THRESHOLD: float = 1_000_000_000_000        # €10T
-CLIP_PERCENTILE: int = 95                              # per‑year percentile for F6 consistency
+SENTINEL_THRESHOLD: float = 1_000_000_000_000        # €1T (fängt 62 Zeilen mit exakt €10T)
 F2_DISCREPANCY_RATIO: float = 10.0                     # VALUE_EURO / AWARD_VALUE_EURO > 10.0
-P95_PERCENTILE: float = 0.95
+P95_PERCENTILE: float = 0.95                            # per‑year percentile for F6 computation
 
 # ---------------------------------------------------------------------------
 # F5: years with insufficient data

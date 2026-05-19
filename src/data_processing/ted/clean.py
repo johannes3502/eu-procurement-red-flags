@@ -93,28 +93,24 @@ def clean_ted_dedup(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def clean_ted_clip_values(
+def clean_ted_remove_sentinels(
     df: pd.DataFrame,
     sentinel_threshold: float = config.SENTINEL_THRESHOLD,
-    clip_pct: int = config.CLIP_PERCENTILE,
 ) -> pd.DataFrame:
-    """Remove sentinel values and clip extreme awards per year.
+    """Remove sentinel (placeholder) values from ``AWARD_VALUE_EURO``.
 
-    Step 1 — Sentinel removal:
-        ``AWARD_VALUE_EURO >= sentinel_threshold`` → set to NaN.
-
-    Step 2 — Per-year percentile clipping:
-        For each year, compute ``p{clip_pct}`` and cap ``AWARD_VALUE_EURO``.
+    Sentinel values are set to NaN — genuine award amounts, even extreme ones,
+    are kept as-is.  This function does NOT apply percentile clipping; real
+    values are not modified.
 
     Args:
-        df: DataFrame with ``YEAR`` and ``AWARD_VALUE_EURO``.
-        sentinel_threshold: Threshold for sentinel removal (default €10T).
-        clip_pct: Clipping percentile (default from config — 95).
+        df: DataFrame with ``AWARD_VALUE_EURO``.
+        sentinel_threshold: Threshold for sentinel removal (default €1T; the
+            actual sentinel value is exactly €10T — 62 rows, all DE 2016–2017).
 
     Returns:
-        DataFrame with cleaned ``AWARD_VALUE_EURO``.
+        DataFrame with sentinel values set to NaN.
     """
-    # Step 1: Sentinel removal
     sentinel_mask = df["AWARD_VALUE_EURO"] >= sentinel_threshold
     n_sentinels = sentinel_mask.sum()
     if n_sentinels > 0:
@@ -125,38 +121,16 @@ def clean_ted_clip_values(
         )
         df = df.copy()
         df.loc[sentinel_mask, "AWARD_VALUE_EURO"] = np.nan
-
-    # Step 2: Per-year percentile clipping
-    clip_frac = clip_pct / 100.0
-    total_clipped = 0
-    df = df.copy()
-
-    for year, grp_idx in df.groupby("YEAR").groups.items():
-        vals = df.loc[grp_idx, "AWARD_VALUE_EURO"].dropna()
-        if len(vals) == 0:
-            logger.debug("Year %s: no non‑NULL AWARD_VALUE_EURO — skipping clip", year)
-            continue
-        threshold = float(vals.quantile(clip_frac))
-        year_mask = df.index.isin(grp_idx) & df["AWARD_VALUE_EURO"].notna()
-        clipped_in_year = (df.loc[year_mask, "AWARD_VALUE_EURO"] > threshold).sum()
-        total_clipped += clipped_in_year
-        df.loc[year_mask, "AWARD_VALUE_EURO"] = df.loc[
-            year_mask, "AWARD_VALUE_EURO"
-        ].clip(upper=threshold)
-        logger.debug(
-            "  Year %s: p%d = €%.2f — clipped %d rows",
-            year,
-            clip_pct,
-            threshold,
-            clipped_in_year,
+        logger.info(
+            "clean_ted_remove_sentinels: %d sentinel values removed — "
+            "genuine amounts left unchanged",
+            n_sentinels,
+        )
+    else:
+        logger.info(
+            "clean_ted_remove_sentinels: no sentinel values found"
         )
 
-    logger.info(
-        "clean_ted_clip_values(p=%d): %d rows clipped across %d years",
-        clip_pct,
-        total_clipped,
-        df["YEAR"].nunique(),
-    )
     return df
 
 

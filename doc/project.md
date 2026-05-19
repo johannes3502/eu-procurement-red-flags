@@ -62,7 +62,7 @@ Alle Quellen werden vollautomatisch durch das Skript `src/download_data.py` bezo
 | `year` | Integer | Jahr der Zuschlagserteilung |
 | `procedure_type` | String | TOP_TYPE (OPE, NIC, AWP, …) |
 | `number_offers` | Integer | Anzahl eingegangener Angebote |
-| `award_value_eur` | Decimal | Zuschlagswert in Euro (geclippt auf per‑year‑p99) |
+| `award_value_eur` | Decimal | Zuschlagswert in Euro (Sentinel €10T entfernt, kein Clipping) |
 | `estimated_value_eur` | Decimal | Geschätzter Auftragswert |
 | `is_accelerated` | Boolean | Beschleunigtes Verfahren – **gestrichen** (99,16 % NULL) |
 | `is_awarded_to_group` | Boolean | Zuschlag an Bietergemeinschaft |
@@ -160,44 +160,50 @@ Die Governance-Scores sind **keine eigene Dimension**, sondern Attribute der Lä
 ## 11. Datenmodell (Sternschema)
 
 ```text
-                    ┌──────────────┐
-                    │  dim_time    │
-                    ├──────────────┤
-                    │ time_key     │
-                    │ year         │
-                    │ crisis_type  │
-                    └──────┬───────┘
-                           │
-                           │
-┌──────────────┐    ┌──────▼─────────┐    ┌──────────────────┐
-│ dim_country  │    │  fact_tender   │    │ dim_procedure_type│
-├──────────────┤    ├────────────────┤    ├──────────────────┤
-│ country_key  │◄───┤ fk_country_key │    │ procedure_key    │
-│ country_code │    │ fk_time_key    │    │ procedure_code   │
-│ country_name │    │ fk_cpv_key     │───►│ procedure_name   │
-│ cpi_score    │    │ fk_procedure_key│   │ transparency_lvl │
-│ wgi_* (6×)   │    ├────────────────┤    └──────────────────┘
-│ valid_from   │    │ award_value    │
-│ valid_to     │    │ number_offers  │
-└──────────────┘    │ flag_f1…f7     │
-                    │ comb_* (3×)    │
-                    └──────┬─────────┘
-                           │
-                           │
-                    ┌──────▼───────┐
-                    │  dim_cpv     │
-                    ├──────────────┤
-                    │ cpv_key      │
-                    │ cpv_code     │
-                    │ cpv_division │
-                    │ cpv_group    │
-                    │ cpv_class    │
-                    └──────────────┘
+                    ┌───────────────────┐
+                    │    dim_country    │
+                    ├───────────────────┤
+                    │ country_key       │◄──────────────────┐
+                    │ country_code      │                   │
+                    │ country_name      │                   │
+                    │ cpi_score         │                   │
+                    │ wgi_* (6×)        │                   │
+                    │ valid_from_year   │                   │
+                    │ valid_to_year     │                   │
+                    └───────────────────┘                   │
+                                                            │
+┌──────────────┐    ┌────────────────────────┐    ┌──────────────────┐
+│  dim_cpv     │    │      fact_tender       │    │ dim_procedure_type│
+├──────────────┤    ├────────────────────────┤    ├──────────────────┤
+│ cpv_key      │◄───┤ cpv_key (FK)           │    │ procedure_key    │
+│ cpv_code     │    │ procedure_key (FK)     │───►│ procedure_code   │
+│ cpv_division │    ├────────────────────────┤    │ procedure_name   │
+│ cpv_group    │    │ award_id (PK)          │    │ transparency_lvl │
+│ cpv_class    │    │ id_notice_can (deg.)   │    │ is_open          │
+└──────────────┘    │ id_lot (deg.)          │    └──────────────────┘
+                    │ country_key (FK)       │──┐  (Auftraggeber)
+                    │ winner_country_key (FK)│──┤  (Gewinner)
+                    │ year (SMALLINT)        │  │
+                    │ crisis_type (VARCHAR)  │  │
+                    │ award_value_eur        │  │
+                    │ value_eur              │  │
+                    │ number_offers          │  │
+                    │ lots_number            │  │
+                    │ number_awards          │  │
+                    │ F1, F2, F3, F5–F7      │  │
+                    │ comb_* (4×)            │  │
+                    └────────────────────────┘  │
+                                                │
+                    ┌───────────────────────────┘
+                    ▼
+              dim_country (Role-Playing)
 ```
 
 - **Faktentabelle:** `fact_tender` – ein Eintrag pro **ID_AWARD** (nach CORRECTIONS-aware Dedup). `ID_NOTICE_CAN` und `ID_LOT` als **degenerierte Dimensionen**.
-- **Dimensionen:** Zeit (Jahresebene), Land (SCD Type 2 mit CPI/WGI), CPV (mit Hierarchie), Verfahrenstyp.
-- **Red Flags:** 6 Flags (F1–F3, F5–F7) + 3 Kombinationen. F4 gestrichen.
+- **Dimensionen:** Kein `dim_time` (Exercise-Vorgabe: Jahr + crisis_type direkt in fact), Land (SCD Type 2 mit CPI/WGI), CPV (mit Hierarchie), Verfahrenstyp.
+- **Role-Playing:** `dim_country` wird zweimal referenziert: `country_key` = Auftraggeber-Land (`ISO_COUNTRY_CODE`), `winner_country_key` = Gewinner-Land (geparst aus `WIN_COUNTRY_CODE`).
+- **Red Flags:** 6 Flags (F1–F3, F5–F7) + 4 Kombinationen. F4 gestrichen.
+- **AWARD_VALUE_EURO:** Nur Sentinel-Entfernung (62 Zeilen mit exakt €10T → NaN). Kein Clipping — echte Auftragswerte bleiben unverändert.
 
 **Snowflake-Erweiterung (optional):**
 Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group → Class) oder eine separate Governance-Tabelle in ein **Snowflake-Schema** überführt werden. Für die geplanten Analysen bietet das Sternschema jedoch ausreichend Performance und bleibt einfacher wartbar.
@@ -206,7 +212,7 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 
 ## 12. Krisen-Dimension
 
-- **Attribut in `dim_time`:** `crisis_type` mit den Ausprägungen `'keine Krise'` (2014–2019), `'COVID-19'` (2020–2021), `'Ukraine-Krieg'` (2022–2023).
+- **Attribut in `fact_tender`:** `crisis_type` mit den Ausprägungen `'keine Krise'` (2014–2019), `'COVID-19'` (2020–2021), `'Ukraine-Krieg'` (2022–2023). Keine separate `dim_time`-Tabelle (Exercise-Vorgabe); `year` und `crisis_type` sind direkt in die Faktentabelle eingebettet.
 - Die Zuordnung erfolgt **jahresweise**; das ist hinreichend genau, da auch die Governance-Scores nur jährlich vorliegen und die Analysen auf Jahresaggregate abzielen.
 - Bei Bedarf kann die Granularität später auf Monate verfeinert werden.
 

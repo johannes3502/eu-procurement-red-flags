@@ -56,7 +56,6 @@ TED_RAW_COLUMNS: List[str] = [
 def run_ted_pipeline(
     years: List[int],
     ted_input_dir: Path = DEFAULT_TED_INPUT,
-    clip_percentile: int = config.CLIP_PERCENTILE,
 ) -> pd.DataFrame:
     """Execute the full TED cleaning pipeline.
 
@@ -64,7 +63,7 @@ def run_ted_pipeline(
         1. Load per‑year CSVs → concatenate
         2. clean_ted_filter_countries
         3. clean_ted_dedup
-        4. clean_ted_clip_values
+        4. clean_ted_remove_sentinels
         5. clean_ted_parse_winner
         6. clean_ted_normalize_cpv
         7. clean_ted_select_columns
@@ -73,7 +72,6 @@ def run_ted_pipeline(
     Args:
         years: List of years to process.
         ted_input_dir: Directory containing ``ted_<year>.csv`` files.
-        clip_percentile: Percentile for monetary clipping.
 
     Returns:
         Fully processed, flag‑enriched DataFrame.
@@ -98,10 +96,10 @@ def run_ted_pipeline(
     df = _next
     stats["after_dedup"] = len(df)
 
-    _next = ted_clean.clean_ted_clip_values(df, clip_pct=clip_percentile)
+    _next = ted_clean.clean_ted_remove_sentinels(df)
     del df; gc.collect()
     df = _next
-    stats["after_clip"] = len(df)
+    stats["after_sentinels"] = len(df)
 
     _next = ted_clean.clean_ted_parse_winner(df)
     del df; gc.collect()
