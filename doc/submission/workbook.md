@@ -71,38 +71,52 @@ CREATE TABLE stg_wgi (
 
 *Welche Formen von Heterogenität bestehen zwischen TED und CPI/WGI? (Exercise Sheet 3, Exercise 1.4)*
 
-### 1. Schema-Heterogenität (Strukturell)
+### 1. Technische Heterogenität
+
+- **TED:** CSV-Dateien — HTTP-Download vom TED-Portal
+- **CPI:** CSV-Datei — HTTP-Download
+- **WGI:** REST API — Aufruf über die `wbgapi` Python-Bibliothek
+
+> **Beispiel:** TED und CPI werden als CSV-Dateien heruntergeladen. WGI wird über eine REST API abgefragt — die JSON-Antwort wird im `download.py` in ein CSV-DataFrame überführt. Die ETL-Pipeline liefert einheitliche CSV-Dateien.
+
+### 2. Data-Model-Heterogenität
+
+- **TED/CPI:** Tabellarisches Datenmodell — CSV → relational
+- **WGI:** API-JSON-Antwort — hierarchisch → nach CSV/DataFrame konvertiert
+
+> **Beispiel:** WGI-Rohdaten liegen als verschachteltes JSON vor. Das `download.py` extrahiert daraus ein tabellarisches Format, sodass alle drei Quellen als flache Tabellen weiterverarbeitet werden.
+
+### 3. Syntaktische Heterogenität
+
+- **TED:** Dezimaltrennzeichen `.` (Euro-Beträge), Booleans (`BOOLEAN`), Datum auf `YEAR` reduziert
+- **CPI:** `cpi_score` als Ganzzahl (`SMALLINT`, 0–100)
+- **WGI:** 6 Dimensionen als `DECIMAL(5,2)`, Dezimaltrennzeichen `.`
+
+> **Beispiel:** `AVG(AWARD_VALUE_EURO)` (DECIMAL) und `AVG(cpi_score)` (SMALLINT) im gleichen Query liefern unterschiedliche numerische Präzision.
+
+### 4. Semantische Heterogenität
+
+- **TED:** ISO Alpha-2 Ländercodes — `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
+- **CPI/WGI:** ISO Alpha-3 Ländercodes — `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
+
+> **Beispiel:** Ohne Mapping findet `WHERE country = 'DE'` nur TED-Zeilen. Lösung: `lookup_countries.csv` (bidirektionales alpha_2 ↔ alpha_3).
+
+### 5. Strukturelle Heterogenität
 
 | Aspekt | TED | CPI | WGI |
 |--------|-----|-----|-----|
-| Quellformat | CSV (75 Spalten roh → 15 behalten + 10 Flags) | CSV (10 Spalten → 3 behalten) | API (`wbgapi`, 8 Spalten behalten) |
-| Zeilenanzahl | ~1,78 Mio. (nach Dedup) | 40 (4 Länder × 10 Jahre) | 40 (4 Länder × 10 Jahre) |
+| Spalten (roh → bereinigt) | 75 → 25 | 10 → 3 | 8 (via API) |
 | Granularität | Pro Auftrag (`ID_AWARD`) | Pro Land-Jahr | Pro Land-Jahr |
-| Schlüsselspalten | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |
+| Zeilenanzahl | ~1,78 Mio. (nach Dedup) | 40 (4 Länder × 10 Jahre) | 40 (4 Länder × 10 Jahre) |
 
-> **Beispiel:** TED liefert 1,78 Mio. Zeilen auf Auftragsebene, CPI/WGI liefern je 40 Zeilen auf Land-Jahr-Ebene. Der Join erfordert SCD Typ 2 auf der Länderdimension — die Governance-Daten werden über alle Aufträge derselben Land-Jahr-Kombination repliziert.
+> **Beispiel:** Der Join von 1,78 Mio. Auftragseinträgen mit je 40 Governance-Zeilen erfordert SCD Typ 2 auf der Länderdimension — die Governance-Daten werden über alle Aufträge derselben Land-Jahr-Kombination repliziert.
 
-### 2. Semantische Heterogenität (Ländercodes)
+### 6. Schematische Heterogenität
 
-- **TED:** Verwendet ISO Alpha-2-Codes: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
-- **CPI/WGI:** Verwenden ISO Alpha-3-Codes: `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
+- **TED:** Primärschlüssel `ID_AWARD` (natürlicher Schlüssel); Großbuchstaben als Namenskonvention
+- **CPI/WGI:** `(country_iso3, year)` als konzeptioneller Schlüssel; Kleinschreibung mit Underscores
 
-> **Beispiel:** Ohne Mapping würde `SELECT … WHERE country = 'DE'` nur TED-Zeilen finden, aber keine CPI/WGI-Zeilen. Lösung: `lookup_countries.csv` bietet bidirektionales Mapping.
-
-### 3. Temporale Heterogenität
-
-- **TED:** Spalte `YEAR` (SMALLINT, 2014–2023). Das Vergabedatum aus `DT_AWARD` ist verfügbar, wird aber nicht importiert.
-- **CPI/WGI:** Spalte `year` (SMALLINT, 2014–2023). Jährlich veröffentlicht; keine unterjährige Auflösung.
-
-> **Beispiel:** TED hat allein für 2021 399.352 Zeilen, während CPI/WGI eine Zeile pro Land-Jahr haben. Governance-Scores werden via SCD Typ 2 repliziert.
-
-### 4. Wertebereich-Heterogenität
-
-- **TED-Kennzahlen:** Euro-Beträge (0 bis Milliarden), Anzahlen (0–999), Booleans
-- **CPI:** `cpi_score` (0–100) — höher = weniger Korruption
-- **WGI:** 6 Dimensionen ([-2,5, +2,5]) — höher = bessere Governance
-
-> **Beispiel:** `AVG(cpi_score)` und `SUM(CAST(F1 AS INT))/COUNT(*)` erfordern unterschiedliche Aggregationsstrategien.
+> **Beispiel:** `ISO_COUNTRY_CODE` (TED) vs. `country_iso3` (CPI/WGI) — gleicher semantischer Typ (Ländercode), aber abweichende Namen und Kodierungen. Gelöst durch `dim_country.country_code` als einheitliches Attribut im Star-Schema.
 
 ---
 
@@ -142,6 +156,14 @@ Die drei Quellen werden über ein **Star-Schema** integriert:
 - CPI + WGI werden über (country_iso3, year) zusammengeführt und als SCD Typ 2 in `dim_country` gespeichert
 - TED-Daten befüllen `fact_tender` mit Fremdschlüsseln auf `dim_country`, `dim_cpv`, `dim_procedure_type`
 - Red Flags werden in der Python-ETL-Pipeline vorberechnet und direkt in `fact_tender` gespeichert
+
+**Aggregationstypen der Kennzahlen** (Details in [`measure_table.md`](../../doc/data-model/measure_table.md)):
+
+| Typ | Kennzahlen |
+|-----|-----------|
+| **FLOW** | `award_value_eur`, `value_eur`, `number_offers`, `lots_number`, `number_awards` — über alle Dimensionen summierbar |
+| **VPU** | F1–F3, F5–F7 + 4 Kombinationen — als Rate auszuwerten: `SUM(CAST(flag AS INT)) / COUNT(*)` |
+| **STOCK** | CPI/WGI-Scores in `dim_country` — nicht über Zeit summierbar (ein Wert pro Land-Jahr) |
 
 ---
 
@@ -189,6 +211,7 @@ CREATE TABLE fact_tender (
 - **Role-Playing:** `dim_country` wird zweimal referenziert — `country_key` (Auftraggeber-Land), `winner_country_key` (Gewinner-Land).
 - **Red Flags:** 6 Einzelflags (F1–F3, F5–F7) + 4 Kombinationen. F4 wurde verworfen (99,16% NULL).
 - **AWARD_VALUE_EURO:** Sentinel-Entfernung (€10T → NaN) — kein Perzentil-Clipping.
+- **Faktentabellen-Typ:** Transactional Fact Table (Vorlesung Folie 20) — eine Zeile pro Vergabeereignis (`ID_AWARD`). Jeder Eintrag repräsentiert einen diskreten Geschäftsvorfall.
 
 ### Dimensionstabellen
 
@@ -316,7 +339,7 @@ SELECT COUNT(*) AS import_errors FROM error_tbl;
 
 - **Größte Tabelle (Zeilen + Größe):** `stg_ted` (1.784.558 Zeilen, 231,39 MB CSV / 151,44 MB Exasol RAW)
 - **Fehlertabelle:** `error_tbl` — 0 Zeilen (fehlerfreier IMPORT), 0 B RAW
-- **Größte Star-Schema-Tabelle:** `fact_tender` (2 Beispielzeilen, < 1 MB)
+- **Faktentabelle:** `fact_tender` — konzeptionell die größte Star-Schema-Tabelle; aktuell 2 Beispielzeilen, wird aus `stg_ted` befüllt
 
 ---
 
