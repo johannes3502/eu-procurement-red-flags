@@ -1,4 +1,4 @@
-# Challenge 3: Data Modelling and Importing the Data
+# Challenge 3: Datenmodellierung und Datenimport
 
 **Name:** Johannes Ramser
 **Matr.Nr.:** [redacted]
@@ -10,9 +10,9 @@ mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
 
 ---
 
-## Staging Area: Tables
+## Staging Area: Tabellen
 
-*`CREATE TABLE` commands for the staging area — 1:1 mirrors of the cleaned parquet files. (Exercise Sheet 3, Exercise 1.3)*
+*DDL der Staging-Tabellen — 1:1-Abbild der bereinigten CSV-Dateien. (Exercise Sheet 3, Exercise 1.3)*
 
 ```sql
 CREATE TABLE stg_ted (
@@ -67,89 +67,89 @@ CREATE TABLE stg_wgi (
 
 ---
 
-## Forms of Heterogeneity
+## Formen der Heterogenität
 
-*Which forms of heterogeneity exist between TED and CPI/WGI? (Exercise Sheet 3, Exercise 1.4)*
+*Welche Formen von Heterogenität bestehen zwischen TED und CPI/WGI? (Exercise Sheet 3, Exercise 1.4)*
 
-### 1. Schema Heterogeneity (Structural)
+### 1. Schema-Heterogenität (Strukturell)
 
-| Aspect | TED | CPI | WGI |
+| Aspekt | TED | CPI | WGI |
 |--------|-----|-----|-----|
-| Source format | CSV (75 columns raw → 15 kept + 10 flags, auto-exports Parquet + CSV) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
-| Row count | ~1.78 Mio. (after dedup) | 40 (4 countries × 10 years) | 40 (4 countries × 10 years) |
-| Granularity | Per award (`ID_AWARD`) | Per country-year | Per country-year |
-| Key columns | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |
+| Quellformat | CSV (75 Spalten roh → 15 behalten + 10 Flags) | CSV (10 Spalten → 3 behalten) | API (`wbgapi`, 8 Spalten behalten) |
+| Zeilenanzahl | ~1,78 Mio. (nach Dedup) | 40 (4 Länder × 10 Jahre) | 40 (4 Länder × 10 Jahre) |
+| Granularität | Pro Auftrag (`ID_AWARD`) | Pro Land-Jahr | Pro Land-Jahr |
+| Schlüsselspalten | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |
 
-> **Example:** TED delivers 1.78 million rows at award granularity, CPI/WGI each deliver 40 rows at country-year granularity. Joining requires SCD Type 2 on the country dimension — governance data is replicated across all awards of the same country-year combination.
+> **Beispiel:** TED liefert 1,78 Mio. Zeilen auf Auftragsebene, CPI/WGI liefern je 40 Zeilen auf Land-Jahr-Ebene. Der Join erfordert SCD Typ 2 auf der Länderdimension — die Governance-Daten werden über alle Aufträge derselben Land-Jahr-Kombination repliziert.
 
-### 2. Semantic Heterogeneity (Country Codes)
+### 2. Semantische Heterogenität (Ländercodes)
 
-- **TED:** Uses ISO Alpha-2 codes: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
-- **CPI/WGI:** Uses ISO Alpha-3 codes: `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
+- **TED:** Verwendet ISO Alpha-2-Codes: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
+- **CPI/WGI:** Verwenden ISO Alpha-3-Codes: `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
 
-> **Example:** Without mapping, `SELECT … WHERE country = 'DE'` would match TED rows but miss CPI/WGI rows. Resolution: `lookup_countries.csv` provides bidirectional mapping.
+> **Beispiel:** Ohne Mapping würde `SELECT … WHERE country = 'DE'` nur TED-Zeilen finden, aber keine CPI/WGI-Zeilen. Lösung: `lookup_countries.csv` bietet bidirektionales Mapping.
 
-### 3. Temporal Heterogeneity
+### 3. Temporale Heterogenität
 
-- **TED:** Column `YEAR` (SMALLINT, 2014–2023). Award date from `DT_AWARD` is available but not imported.
-- **CPI/WGI:** Column `year` (SMALLINT, 2014–2023). Published annually; no sub-year resolution.
+- **TED:** Spalte `YEAR` (SMALLINT, 2014–2023). Das Vergabedatum aus `DT_AWARD` ist verfügbar, wird aber nicht importiert.
+- **CPI/WGI:** Spalte `year` (SMALLINT, 2014–2023). Jährlich veröffentlicht; keine unterjährige Auflösung.
 
-> **Example:** TED has 399,352 rows for 2021 alone, while CPI/WGI have one row per country-year. Governance scores are replicated via SCD Type 2.
+> **Beispiel:** TED hat allein für 2021 399.352 Zeilen, während CPI/WGI eine Zeile pro Land-Jahr haben. Governance-Scores werden via SCD Typ 2 repliziert.
 
-### 4. Value Range Heterogeneity
+### 4. Wertebereich-Heterogenität
 
-- **TED measures:** Euro amounts (0 to billions), counts (0–999), booleans
-- **CPI:** `cpi_score` (0–100) — higher = less corruption
-- **WGI:** 6 dimensions ([-2.5, +2.5]) — higher = better governance
+- **TED-Kennzahlen:** Euro-Beträge (0 bis Milliarden), Anzahlen (0–999), Booleans
+- **CPI:** `cpi_score` (0–100) — höher = weniger Korruption
+- **WGI:** 6 Dimensionen ([-2,5, +2,5]) — höher = bessere Governance
 
-> **Example:** `AVG(cpi_score)` and `SUM(CAST(F1 AS INT))/COUNT(*)` require different aggregation strategies.
+> **Beispiel:** `AVG(cpi_score)` und `SUM(CAST(F1 AS INT))/COUNT(*)` erfordern unterschiedliche Aggregationsstrategien.
 
 ---
 
 ## Schema Matching
 
-*Which attributes from TED correspond with which attributes from CPI/WGI? (Exercise Sheet 3, Exercise 1.5)*
+*Welche Attribute aus TED korrespondieren mit welchen aus CPI/WGI? (Exercise Sheet 3, Exercise 1.5)*
 
 ### TED → CPI Schema Matching
 
-| TED Attribute | CPI Attribute | Match Type |
+| TED-Attribut | CPI-Attribut | Match-Typ |
 |---------------|---------------|------------|
-| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantic** — different encoding, resolved via `lookup_countries.csv` |
-| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exact** — identical name, type, and range |
-| *(no CPI score in TED)* | `cpi_score` (SMALLINT, 0–100) | **New attribute** — only in CPI, joined on (country, year) |
+| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantisch** — unterschiedliche Kodierung, aufgelöst via `lookup_countries.csv` |
+| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exakt** — identischer Name, Typ und Wertebereich |
+| *(kein CPI-Score in TED)* | `cpi_score` (SMALLINT, 0–100) | **Neues Attribut** — nur in CPI, gejoint über (Land, Jahr) |
 
 ### TED → WGI Schema Matching
 
-| TED Attribute | WGI Attribute | Match Type |
+| TED-Attribut | WGI-Attribut | Match-Typ |
 |---------------|---------------|------------|
-| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantic** — resolved via lookup table |
-| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exact** — identical name, type, and range |
-| *(no WGI dimensions in TED)* | 6× WGI scores (DECIMAL(5,2)) | **New attributes** — only in WGI, joined on (country, year) |
+| `ISO_COUNTRY_CODE` (Alpha-2: DE) | `country_iso3` (Alpha-3: DEU) | **Semantisch** — aufgelöst via Lookup-Tabelle |
+| `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exakt** — identischer Name, Typ und Wertebereich |
+| *(keine WGI-Dimensionen in TED)* | 6× WGI-Scores (DECIMAL(5,2)) | **Neue Attribute** — nur in WGI, gejoint über (Land, Jahr) |
 
-> **Externer Lookup:** Die Datei [`lookup_countries.csv`](../../data/lookup/lookup_countries.csv) (4 Zeilen, `alpha_2` ↔ `alpha_3` ↔ `country_name`) wird im Python-ETL geladen und dient als Mapping-Hilfe für den TED-Länderfilter, den CPI/WGI-Join und die Country-Names in `dim_country`. Sie wird **nicht** als separate Staging-Tabelle in Exasol importiert.
+> **Externer Lookup:** Die Datei [`lookup_countries.csv`](../../data/lookup/lookup_countries.csv) (4 Zeilen, `alpha_2` ↔ `alpha_3` ↔ `country_name`) wird im Python-ETL geladen und dient als Mapping-Hilfe für den TED-Länderfilter, den CPI/WGI-Join und die Ländernamen in `dim_country`. Sie wird **nicht** als separate Staging-Tabelle in Exasol importiert.
 
 ### CPI → WGI Schema Matching
 
-| CPI Attribute | WGI Attribute | Match Type |
+| CPI-Attribut | WGI-Attribut | Match-Typ |
 |---------------|---------------|------------|
-| `country_iso3` (CHAR(3)) | `country_iso3` (CHAR(3)) | **Exact** — identical name, type, and encoding |
-| `year` (SMALLINT) | `year` (SMALLINT) | **Exact** — identical name, type, and range |
-| *(different scores)* | *(6 governance dimensions)* | **Related** — both measure governance quality, but at different granularity (CPI: single corruption perception score; WGI: six multi-dimensional indicators) |
+| `country_iso3` (CHAR(3)) | `country_iso3` (CHAR(3)) | **Exakt** — identischer Name, Typ und Kodierung |
+| `year` (SMALLINT) | `year` (SMALLINT) | **Exakt** — identischer Name, Typ und Wertebereich |
+| *(unterschiedliche Scores)* | *(6 Governance-Dimensionen)* | **Verwandt** — beide messen Governance-Qualität, aber auf unterschiedlicher Granularität (CPI: einzelner Korruptionswahrnehmungs-Score; WGI: sechs mehrdimensionale Indikatoren) |
 
-### Integrated Schema Decision
+### Integrationsentscheidung
 
-The three sources are integrated via a **star schema**:
-- CPI + WGI are merged on (country_iso3, year) and stored as SCD Type 2 attributes in `dim_country`
-- TED data populates `fact_tender` with foreign keys to `dim_country`, `dim_cpv`, `dim_procedure_type`
-- Red flags are pre-computed in the Python ETL pipeline and stored directly in `fact_tender`
+Die drei Quellen werden über ein **Star-Schema** integriert:
+- CPI + WGI werden über (country_iso3, year) zusammengeführt und als SCD Typ 2 in `dim_country` gespeichert
+- TED-Daten befüllen `fact_tender` mit Fremdschlüsseln auf `dim_country`, `dim_cpv`, `dim_procedure_type`
+- Red Flags werden in der Python-ETL-Pipeline vorberechnet und direkt in `fact_tender` gespeichert
 
 ---
 
 ## Star / Snowflake Schema
 
-*The DDL of the final star schema — with `winner_country` as Role-Playing FK. (Exercise Sheet 3, Exercise 1.6)*
+*DDL des finalen Star-Schemas — mit `winner_country` als Role-Playing-FK. (Exercise Sheet 3, Exercise 1.6)*
 
-### Fact table: `fact_tender`
+### Faktentabelle: `fact_tender`
 
 ```sql
 CREATE TABLE fact_tender (
@@ -185,12 +185,12 @@ CREATE TABLE fact_tender (
 );
 ```
 
-- **One row per `ID_AWARD`** (CORRECTIONS-aware dedup). `ID_NOTICE_CAN` and `ID_LOT` as degenerate dimensions.
-- **Role-Playing:** `dim_country` referenced twice — `country_key` (Auftraggeber-Land), `winner_country_key` (Gewinner-Land).
-- **Red Flags:** 6 single flags (F1–F3, F5–F7) + 4 combinations. F4 dropped (99.16% NULL).
-- **AWARD_VALUE_EURO:** Sentinel removal (€10T → NaN) only — no percentile clipping.
+- **Eine Zeile pro `ID_AWARD`** (CORRECTIONS-bewusster Dedup). `ID_NOTICE_CAN` und `ID_LOT` als degenerierte Dimensionen.
+- **Role-Playing:** `dim_country` wird zweimal referenziert — `country_key` (Auftraggeber-Land), `winner_country_key` (Gewinner-Land).
+- **Red Flags:** 6 Einzelflags (F1–F3, F5–F7) + 4 Kombinationen. F4 wurde verworfen (99,16% NULL).
+- **AWARD_VALUE_EURO:** Sentinel-Entfernung (€10T → NaN) — kein Perzentil-Clipping.
 
-### Dimension tables
+### Dimensionstabellen
 
 ```sql
 CREATE TABLE dim_country (
@@ -232,38 +232,35 @@ CREATE TABLE dim_procedure_type (
 
 ## IMPORT
 
-*`IMPORT` commands to load data from cleaned CSV files into staging tables. (Exercise Sheet 3, Exercise 2.1)*
+*IMPORT-Befehle zum Laden der bereinigten CSV-Dateien in die Staging-Tabellen. (Exercise Sheet 3, Exercise 2.1)*
 
-**Source file properties (inspected via Notepad++ and hex viewer):**
+**Quelldatei-Eigenschaften (definiert durch die Python-ETL-Pipeline — [`export_csv()`](../../src/processing/utils.py) schreibt UTF-8, LF, Komma-getrennt):**
 
-| Property | TED CSV | CPI CSV | WGI CSV |
+| Eigenschaft | TED CSV | CPI CSV | WGI CSV |
 |----------|---------|---------|---------|
-| Encoding | UTF-8 (no BOM) | UTF-8 (no BOM) | UTF-8 (no BOM) |
-| Line ending | LF (Unix) | LF (Unix) | LF (Unix) |
-| Column separator | `,` (comma) | `,` (comma) | `,` (comma) |
-| String delimiter | `"` (double quote) | `"` (double quote) | `"` (double quote) |
-| Header row | Yes (first line) | Yes (first line) | Yes (first line) |
-| Decimal mark | `.` (point) | — (integers) | `.` (point) |
-| Thousands separator | None | None | None |
+| Kodierung | UTF-8 (ohne BOM) | UTF-8 (ohne BOM) | UTF-8 (ohne BOM) |
+| Zeilenende | LF (Unix) | LF (Unix) | LF (Unix) |
+| Spaltentrenner | `,` (Komma) | `,` (Komma) | `,` (Komma) |
+| String-Begrenzer | `"` (doppelte Anführungszeichen) | `"` (doppelte Anführungszeichen) | `"` (doppelte Anführungszeichen) |
+| Kopfzeile | Ja (erste Zeile) | Ja (erste Zeile) | Ja (erste Zeile) |
+| Dezimalzeichen | `.` (Punkt) | — (Ganzzahlen) | `.` (Punkt) |
+| Tausendertrenner | Keiner | Keiner | Keiner |
 
-**Prerequisite:** CSV-Dateien werden von der ETL-Pipeline automatisch produziert
-(`python -m src.processing.run_cleanup` → Parquet + CSV in `data/processed/*/`).
+**Voraussetzung:** Die CSV-Dateien werden von der ETL-Pipeline automatisch produziert
+(`python -m src.processing.run_cleanup` → CSV in `data/processed/*/`).
 
-**Error table setup (execute once before first IMPORT):**
+**Fehlertabelle (wird von Exasol automatisch beim ersten `ERRORS INTO` angelegt):**
 
-```sql
-OPEN SCHEMA JOHANNES_RAMSER;
-
-DROP TABLE IF EXISTS error_tbl;
-CREATE TABLE error_tbl (
-    ROW_INDEX        DECIMAL(18,0),
-    COLUMN_NAME      VARCHAR(128),
-    ERROR_MESSAGE    VARCHAR(2000),
-    ERROR_TIMESTAMP  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+```
+ROW_NR      DECIMAL(18,0)
+ERROR_TEXT  VARCHAR(1000) UTF8
+TRUNCATED   BOOLEAN
+CSV_DATA    VARCHAR(2000000) UTF8
 ```
 
-**IMPORT script (also at [`src/dw/ddl/import_staging.sql`](../../src/dw/ddl/import_staging.sql)):**
+> Kein manuelles `CREATE TABLE` nötig — Exasol erzeugt `error_tbl` selbst.
+
+**IMPORT-Skript (auch unter [`src/dw/ddl/import_staging.sql`](../../src/dw/ddl/import_staging.sql)):**
 
 ```sql
 OPEN SCHEMA JOHANNES_RAMSER;
@@ -303,24 +300,26 @@ SELECT COUNT(*) AS import_errors FROM error_tbl;
 
 ---
 
-## Numbers
+## Zahlen & Größen
 
-| Table | Rows | Parquet (Snappy) | Exasol RAW (Nutzdaten) | Exasol MEM (mit Overhead) |
+| Tabelle | Zeilen | CSV | Exasol RAW (Nutzdaten) | Exasol MEM (mit Overhead) |
 |-------|------|-----------------|------------------------|--------------------------|
-| `stg_ted` | 1,784,558 | 28.42 MB | 151.44 MB | 65.27 MB |
-| `stg_cpi` | 40 | < 0.01 MB | 440 B | 13.6 KB |
-| `stg_wgi` | 40 | < 0.01 MB | 1.0 KB | 30.8 KB |
-| `dim_country` | 2 | — | 94 B | 48.1 KB |
-| `dim_cpv` | 2 | — | 50 B | 30.8 KB |
-| `dim_procedure_type` | 2 | — | 75 B | 23.9 KB |
-| `fact_tender` | 2 | — | 261 B | 95.9 KB |
-| **Gesamt** | **1,784,642** | **~28.43 MB** | **~151.44 MB** | **~65.50 MB** |
+| `stg_ted` | 1.784.558 | 231,39 MB | 151,44 MB | 65,27 MB |
+| `stg_cpi` | 40 | 0,50 KB | 440 B | 13,6 KB |
+| `stg_wgi` | 40 | 2,86 KB | 1,0 KB | 30,8 KB |
+| `error_tbl` | 0 | — | 0 B | — |
+| `dim_country` | 2 | — | 94 B | 48,1 KB |
+| `dim_cpv` | 2 | — | 50 B | 30,8 KB |
+| `dim_procedure_type` | 2 | — | 75 B | 23,9 KB |
+| `fact_tender` | 2 | — | 261 B | 95,9 KB |
+| **Gesamt** | **1.784.642** | **~231,39 MB** | **~151,44 MB** | **~65,50 MB** |
 
-- **Biggest table (rows + size):** `stg_ted` (1,784,558 rows, 28.42 MB Parquet / 151.44 MB Exasol RAW)
-- **Biggest star-schema table:** `fact_tender` (2 example rows, < 1 MB)
+- **Größte Tabelle (Zeilen + Größe):** `stg_ted` (1.784.558 Zeilen, 231,39 MB CSV / 151,44 MB Exasol RAW)
+- **Fehlertabelle:** `error_tbl` — 0 Zeilen (fehlerfreier IMPORT), 0 B RAW
+- **Größte Star-Schema-Tabelle:** `fact_tender` (2 Beispielzeilen, < 1 MB)
 
 ---
 
-## ME/R Model
+## ME/R Modell
 
-![ME/R Model](../data-model/mer_model.png)
+![ME/R Modell](../data-model/mer_model.png)

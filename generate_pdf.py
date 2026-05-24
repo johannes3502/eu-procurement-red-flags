@@ -16,12 +16,11 @@ html = markdown.markdown(md_text, extensions=["fenced_code", "tables"])
 img_abs = img_path.resolve().as_posix()
 html = html.replace('src="../data-model/mer_model.png"', f'src="file:///{img_abs}"')
 
-# Wrap MER heading + image together in landscape div
-# Original HTML: <h2>ME/R Model</h2>\n<p><img ... /></p>
-# Replace entire block with landscape-page div
+# Wrap MER heading + image together in a single landscape-page div.
+# The heading text is injected inline so it stays on the same page as the image.
 html = re.sub(
-    r'<h2>ME/R Model</h2>\s*<p>(<img[^>]+>)</p>',
-    r'<div class="landscape-page"><h2 style="page-break-before:avoid;border:none">ME/R Model</h2><p>\1</p></div>',
+    r'<h2>ME/R Modell</h2>\s*<p>(<img[^>]+>)</p>',
+    r'<div class="landscape-page"><div class="landscape-heading">ME/R Modell</div><p>\1</p></div>',
     html,
     flags=re.DOTALL
 )
@@ -39,9 +38,23 @@ css = """
   table { border-collapse: collapse; width: 100%; font-size: 9pt; }
   th, td { border: 1px solid #999; padding: 4px 8px; }
   th { background: #e0e8f0; }
-  .landscape-page { page: landscape; page-break-before: always; page-break-after: always; text-align: center; }
-  .landscape-page h2 { border: none; }
-  .landscape-page img { max-width: 100%; max-height: 85vh; height: auto; display: inline; }
+  .landscape-page {
+    page: landscape;
+    page-break-before: always;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 90vh;
+  }
+  .landscape-heading {
+    font-size: 14pt;
+    color: #004080;
+    font-weight: bold;
+    margin-bottom: 16px;
+  }
+  .landscape-page img { max-width: 100%; max-height: 80vh; height: auto; }
   hr { border: none; border-top: 1px solid #ccc; margin: 1.5em 0; }
   blockquote { border-left: 3px solid #ccc; margin: 1em 0; padding: 0.5em 1em; background: #f9f9f9; font-style: italic; }
 </style>"""
