@@ -262,6 +262,7 @@ def main() -> None:
         ted_input_dir=args.ted_input_dir,
     )
     utils.export_parquet(df_ted, ted_output)
+    utils.export_csv(df_ted, ted_output.with_suffix(".csv"))
     summary["ted"] = {
         "rows": len(df_ted),
         "columns": len(df_ted.columns),
@@ -273,6 +274,7 @@ def main() -> None:
     cpi_output = cpi_output_dir / "cpi_clean.parquet"
     df_cpi = run_cpi_pipeline(args.cpi_input)
     utils.export_parquet(df_cpi, cpi_output)
+    utils.export_csv(df_cpi, cpi_output.with_suffix(".csv"))
     summary["cpi"] = {
         "rows": len(df_cpi),
         "columns": len(df_cpi.columns),
@@ -284,6 +286,7 @@ def main() -> None:
     wgi_output = wgi_output_dir / "wgi_clean.parquet"
     df_wgi = run_wgi_pipeline(args.wgi_input)
     utils.export_parquet(df_wgi, wgi_output)
+    utils.export_csv(df_wgi, wgi_output.with_suffix(".csv"))
     summary["wgi"] = {
         "rows": len(df_wgi),
         "columns": len(df_wgi.columns),

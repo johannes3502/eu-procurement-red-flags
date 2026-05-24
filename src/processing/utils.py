@@ -166,6 +166,23 @@ def export_parquet(df: pd.DataFrame, path: Path) -> None:
     logging.getLogger(__name__).info("Exported %d rows to %s", len(df), path)
 
 
+def export_csv(df: pd.DataFrame, path: Path) -> None:
+    """Write a DataFrame as CSV compatible with Exasol's IMPORT FROM LOCAL CSV FILE.
+
+    Creates parent directories if they don't exist.
+
+    Args:
+        df: DataFrame to export.
+        path: Destination path (should end in ``.csv``).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8", lineterminator="\n")
+    size_mb = path.stat().st_size / (1024 * 1024)
+    logging.getLogger(__name__).info(
+        "Exported %d rows to %s (%.2f MB)", len(df), path, size_mb
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pipeline-step logging
 # ---------------------------------------------------------------------------

@@ -254,11 +254,11 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 | Schwachstellenanalyse | manuell (Architekt) | **F2 10.0**, **F3 NIC/AWP**, **F6 ==1** final verifiziert |
 | Data Preparation Plan | `plans/data-preparation-for-warehouse.md` | Vollständige ETL-Spezifikation mit allen Regeln |
 | **ETL‑Config** (zentrale Konstanten) | `src/processing/config.py` | Pfade, Thresholds, Spaltenlisten, Exasol-Type-Map |
-| **Shared‑Utilities** (Wiederverwendbare Helfer) | `src/processing/utils.py` | Country-Lookup, TED-CSV-Loader, p95, Parquet-Export, Step-Logging |
+| **Shared‑Utilities** (Wiederverwendbare Helfer) | `src/processing/utils.py` | Country-Lookup, TED-CSV-Loader, p95, Parquet-Export, CSV-Export, Step-Logging |
 | **Cleanup‑Modul TED** | `src/processing/ted/clean.py` | 7 clean_ted_*() + compute_red_flags() |
 | **Cleanup‑Modul CPI** | `src/processing/cpi/clean.py` | clean_cpi() |
 | **Cleanup‑Modul WGI** | `src/processing/wgi/clean.py` | clean_wgi() |
-| **Orchestrierung** (alle Datensätze) | `src/processing/run_cleanup.py` | CLI‑Pipeline: --years, --ted-input-dir, --cpi-input, --wgi-input, --output-dir |
+| **Orchestrierung** (alle Datensätze) | `src/processing/run_cleanup.py` | CLI‑Pipeline: --years, --ted-input-dir, --cpi-input, --wgi-input, --output-dir. Produziert Parquet + CSV |
 
 Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.md`](red-flags-procurement-governance/doc/profiling/analysis/analysis_results.md).
 
@@ -274,8 +274,9 @@ Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.m
 | 4 Deep‑Dive‑Analysen (Dedup, Monetary, Country, Flags) | ✅ Abgeschlossen |
 | Red‑Flag‑Definitionen (final, datengestützt) | ✅ Abgeschlossen |
 | Data Preparation Plan (vollständige ETL-Spezifikation) | ✅ Abgeschlossen |
-| **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ Abgeschlossen |
-| **Exasol DDL + Automation** (`setup_and_load.py` — DDL, Parquet-Load, INSERTs, Verify) | ✅ Abgeschlossen — alle 7 Tabellen erstellt, 1.784.558 TED-Zeilen + CPI/WGI geladen, 2 Beispielzeilen pro Star-Schema-Tabelle |
+| **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ Abgeschlossen — `run_cleanup.py` produziert Parquet + CSV |
+| **Exasol DDL + Automation** (`setup_and_load.py` — DDL, Parquet-Load via `import_from_pandas()`, INSERTs, Verify) | ✅ Abgeschlossen — alle 7 Tabellen erstellt, 1.784.558 TED-Zeilen + CPI/WGI geladen, 2 Beispielzeilen pro Star-Schema-Tabelle |
+| **Nativer IMPORT FROM LOCAL CSV (Challenge 3)** | ✅ Abgeschlossen — `import_staging.sql` enthält die nativen IMPORT-Statements; ausgeführt in DBeaver, 1,784,558 + 40 + 40 Zeilen geladen, `error_tbl` enthält 0 Fehler |
 | Analyse-Queries & Visualisierung | 📋 Geplant |
 
 **Nächste Schritte:**

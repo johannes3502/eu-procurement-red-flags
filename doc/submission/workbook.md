@@ -75,7 +75,7 @@ CREATE TABLE stg_wgi (
 
 | Aspect | TED | CPI | WGI |
 |--------|-----|-----|-----|
-| Source format | CSV (75 columns raw → 15 kept + 10 flags) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
+| Source format | CSV (75 columns raw → 15 kept + 10 flags, auto-exports Parquet + CSV) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
 | Row count | ~1.78 Mio. (after dedup) | 40 (4 countries × 10 years) | 40 (4 countries × 10 years) |
 | Granularity | Per award (`ID_AWARD`) | Per country-year | Per country-year |
 | Key columns | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |
@@ -246,50 +246,59 @@ CREATE TABLE dim_procedure_type (
 | Decimal mark | `.` (point) | — (integers) | `.` (point) |
 | Thousands separator | None | None | None |
 
-**Prerequisite:** One-time CSV export from parquet (Python):
-```python
-import pandas as pd
-pd.read_parquet('data/processed/ted/ted_clean.parquet').to_csv('data/processed/ted/ted_clean.csv', index=False)
-pd.read_parquet('data/processed/cpi/cpi_clean.parquet').to_csv('data/processed/cpi/cpi_clean.csv', index=False)
-pd.read_parquet('data/processed/wgi/wgi_clean.parquet').to_csv('data/processed/wgi/wgi_clean.csv', index=False)
-```
+**Prerequisite:** CSV-Dateien werden von der ETL-Pipeline automatisch produziert
+(`python -m src.processing.run_cleanup` → Parquet + CSV in `data/processed/*/`).
+
+**Error table setup (execute once before first IMPORT):**
 
 ```sql
--- IMPORT stg_ted (25 columns: 15 base + 10 flags)
+OPEN SCHEMA JOHANNES_RAMSER;
+
 DROP TABLE IF EXISTS error_tbl;
+CREATE TABLE error_tbl (
+    ROW_INDEX        DECIMAL(18,0),
+    COLUMN_NAME      VARCHAR(128),
+    ERROR_MESSAGE    VARCHAR(2000),
+    ERROR_TIMESTAMP  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**IMPORT script (also at [`src/dw/ddl/import_staging.sql`](../../src/dw/ddl/import_staging.sql)):**
+
+```sql
+OPEN SCHEMA JOHANNES_RAMSER;
 
 IMPORT INTO stg_ted
-FROM LOCAL CSV FILE 'data/processed/ted/ted_clean.csv'
+FROM LOCAL CSV FILE 'C:/Users/Johannes/uni/sose26/dw/red-flags-procurement-governance/data/processed/ted/ted_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
 SKIP = 1
-ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
-
--- IMPORT stg_cpi (3 columns)
-DROP TABLE IF EXISTS error_tbl;
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED;
 
 IMPORT INTO stg_cpi
-FROM LOCAL CSV FILE 'data/processed/cpi/cpi_clean.csv'
+FROM LOCAL CSV FILE 'C:/Users/Johannes/uni/sose26/dw/red-flags-procurement-governance/data/processed/cpi/cpi_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
 SKIP = 1
-ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
-
--- IMPORT stg_wgi (8 columns)
-DROP TABLE IF EXISTS error_tbl;
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED;
 
 IMPORT INTO stg_wgi
-FROM LOCAL CSV FILE 'data/processed/wgi/wgi_clean.csv'
+FROM LOCAL CSV FILE 'C:/Users/Johannes/uni/sose26/dw/red-flags-procurement-governance/data/processed/wgi/wgi_clean.csv'
 ENCODING = 'UTF-8'
 ROW SEPARATOR = 'LF'
 COLUMN SEPARATOR = ','
 COLUMN DELIMITER = '"'
 SKIP = 1
-ERRORS INTO error_tbl REJECT LIMIT UNLIMITED IGNORE CERTIFICATE;
+ERRORS INTO error_tbl REJECT LIMIT UNLIMITED;
+
+SELECT 'stg_ted' AS "table", COUNT(*) FROM stg_ted
+UNION ALL SELECT 'stg_cpi', COUNT(*) FROM stg_cpi
+UNION ALL SELECT 'stg_wgi', COUNT(*) FROM stg_wgi;
+SELECT COUNT(*) AS import_errors FROM error_tbl;
 ```
 
 ---

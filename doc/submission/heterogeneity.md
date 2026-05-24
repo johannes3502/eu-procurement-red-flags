@@ -9,7 +9,7 @@
 
 | Aspect | TED | CPI | WGI |
 |--------|-----|-----|-----|
-| Source format | CSV (75 columns raw → 15 kept) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
+| Source format | CSV (75 columns raw → 15 kept + 10 flags, auto-exports Parquet + CSV) | CSV (10 columns → 3 kept) | API (`wbgapi`, 8 columns kept) |
 | Row count | ~1.78 Mio. (after dedup) | 40 (4 countries × 10 years) | 40 (4 countries × 10 years) |
 | Granularity | Per award (`ID_AWARD`) | Per country-year | Per country-year |
 | Key columns | `ID_AWARD`, `ISO_COUNTRY_CODE`, `YEAR` | `country_iso3`, `year`, `cpi_score` | `country_iso3`, `year`, 6× WGI |

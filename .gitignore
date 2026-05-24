@@ -232,3 +232,5 @@ presentation_questions.md
 
 /temp/
 doc/profiling/
+src/dw/ddl/reset_staging.sql
+src/dw/reset_staging.py
