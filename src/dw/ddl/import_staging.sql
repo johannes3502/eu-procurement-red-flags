@@ -34,3 +34,4 @@ UNION ALL
 SELECT 'stg_wgi', COUNT(*) FROM JOHANNES_RAMSER.stg_wgi;
 
 SELECT COUNT(*) AS import_errors FROM JOHANNES_RAMSER.error_tbl;
+  

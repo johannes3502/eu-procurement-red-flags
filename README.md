@@ -366,19 +366,29 @@ Nach der Pipeline-Verarbeitung entstehen:
 
 ## 🛠️ Projektstatus
 
-✅ **Abgeschlossen:**
-- Datenherunterlad (Download-Skript für TED/CPI/WGI)
-- ETL-Core: Config + Utils + per-Dataset Clean-Submodule + Orchestrierung
-- Data Profiling (automatisierte Qualitätsanalyse)
-- Lookup-Tabelle (`data/lookup/lookup_countries.csv`)
+✅ **Challenge 1 — Presentation:** Submitted & graded
 
-📋 **Geplant:**
-- Data Warehouse Schema (Sternschema-DDL)
-- Dimension Builder + Faktentabelle
-- DWH-Loader (`src/dw/`)
-- Exasol-Integration
-- Airflow-Automatisierung
-- Dashboard (Tableau/PowerBI)
+✅ **Challenge 2 — Data Modelling:**
+- Sternschema-DDL (`src/dw/ddl/create_star_schema.sql`) — 4 Tabellen (dim_country SCD2, dim_cpv, dim_procedure_type, fact_tender)
+- ME/R Model, Measure Table (FLOW/STOCK/VPU), Snowflake-Variante
+
+✅ **Challenge 3 — Schema Integration & IMPORT:**
+- Staging-Tabellen (`stg_ted`, `stg_cpi`, `stg_wgi`) — 1.784.558 + 40 + 40 Zeilen
+- Nativer `IMPORT FROM LOCAL CSV FILE` via DBeaver auf Uni-VPN-Exasol (Schema `JOHANNES_RAMSER`)
+- Formen der Heterogenität (technisch, Datenmodell, syntaktisch, semantisch, strukturell, schematisch)
+- Schema Matching TED ↔ CPI ↔ WGI
+- Exasol-Automation über `setup_and_load.py` (pyexasol) — alternativer Load-Path
+
+✅ **Challenge 4 — Data Integration & Analytical Queries:**
+- Data Quality Checks in SQL (`data_quality_checks.sql`) — error_info-Spalten, Duplikate, Sentinel-Entfernung, Entity-Matching (Equal/Levenshtein/Soundex), FP/FN-Analyse
+- MERGE-Befehle (`merge_dimensions.sql`) — dim_procedure_type, dim_cpv, dim_country (SCD Type 2), fact_tender (Role-Playing)
+- 7 analytische Queries (`analytical_queries.sql`) — ROLLUP, Window AVG, RANK, CORR/STDDEV_POP, Skyline PREFERRING, Krisenvergleich, Lot-Fragmentierung
+- Workbook `exercises/Challenge4.md` vollständig ausgefüllt (Name, Titel, 5 Data-Transformation-Antworten mit SQL, MERGE-Kommando, 7 Queries)
+
+📋 **Ausstehend (manuell):**
+- SQL-Skripte in DBeaver auf Uni-VPN-Exasol ausführen
+- Workbook → PDF exportieren
+- ELO-Upload
 
 ---
 

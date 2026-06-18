@@ -49,9 +49,15 @@ red-flags-procurement-governance/
 │   │   ├── run_cleanup.py      # CLI-Orchestrierung
 │   │   └── profiling/          # Data Profiling & Analyse
 │   ├── dw/
+│   │   ├── setup_and_load.py      # Exasol-Automation (pyexasol)
 │   │   └── ddl/
 │   │       ├── create_star_schema.sql
-│   │       └── insert_example_rows.sql
+│   │       ├── create_staging_tables.sql
+│   │       ├── insert_example_rows.sql
+│   │       ├── import_staging.sql
+│   │       ├── data_quality_checks.sql    # Challenge 4: error_info, Dedup, Entity Matching
+│   │       ├── merge_dimensions.sql       # Challenge 4: MERGE + INSERT fact_tender
+│   │       └── analytical_queries.sql     # Challenge 4: 7 analytische Queries
 │   └── log/
 ├── data/
 │   ├── raw/                    # Rohdaten (ted_<YYYY>.csv, cpi_raw.csv, wgi_raw.csv)
@@ -261,49 +267,47 @@ python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 
 ---
 
-## 6. Analyse-Queries (mehrdimensional)
+## 6. Analyse-Queries (Challange 4 — 7 Queries)
 
-**Query 1: Single-Bidder-Rate pro Land & Jahr**
+Die vollständigen Queries liegen in [`src/dw/ddl/analytical_queries.sql`](src/dw/ddl/analytical_queries.sql):
+
+| # | Typ | Beschreibung |
+|---|-----|-------------|
+| **Q1** | `ROLLUP` | Red-Flag-Raten (F1, F2, F3) pro Land+Jahr + Subtotals + Grand Total |
+| **Q2** | Window (non-ranking) | Gleitender 3-Jahres-Durchschnitt der Single-Bidder-Rate (AVG OVER … ROWS 2 PRECEDING) |
+| **Q3** | Ranking (`RANK`) | Top-15 CPV-Divisionen mit höchster Estimate/Award-Discrepancy-Rate |
+| **Q4** | Statistical (`CORR`, `STDDEV_POP`) | Korrelation CPI-Score ↔ Single-Bidder-Rate, mit Streuungsmaßen |
+| **Q5** | Skyline (`PREFERRING`) | Länder-Skyline: `HIGH avg_cpi PLUS LOW f3_rate` — nicht-dominierte Länder |
+| **Q6** | Krisenvergleich | F6 High-Value-Single-Bidder-Rate nach `crisis_type` (keine Krise / COVID-19 / Ukraine-Krieg) |
+| **Q7** | Lot-Fragmentierung | F7-Rate nach Verfahrenstyp und Land — korreliert Fragmentierung mit `transparency_level`? |
+
+**Query 1 (vereinfacht): ROLLUP über Land und Jahr**
 ```sql
-SELECT 
-  dc.country_code,
-  ft.year,
-  COUNT(*) AS total,
-  SUM(CAST(ft.F1 AS INT)) AS single_bidder,
-  ROUND(100.0 * SUM(CAST(ft.F1 AS INT)) / COUNT(*), 2) AS sb_pct
-FROM fact_tender ft
-JOIN dim_country dc ON ft.country_key = dc.country_key
-WHERE ft.year BETWEEN 2014 AND 2023
-GROUP BY dc.country_code, ft.year
-ORDER BY dc.country_code, ft.year;
+SELECT
+    c.country_name, f."year",
+    COUNT(*) AS tender_count,
+    ROUND(100.0 * SUM(CAST(f.F1 AS INT)) / NULLIF(COUNT(*), 0), 2) AS f1_pct,
+    GROUPING(c.country_name) AS grp_country,
+    GROUPING(f."year")         AS grp_year
+FROM fact_tender f
+JOIN dim_country c ON f.country_key = c.country_key
+GROUP BY ROLLUP(c.country_name, f."year")
+ORDER BY GROUPING(c.country_name), c.country_name, GROUPING(f."year"), f."year";
 ```
 
-**Query 2: Gewinner-Land ≠ Auftraggeber-Land (Cross-Border)**
+**Query 5 (vereinfacht): Skyline**
 ```sql
-SELECT 
-  dc_a.country_code AS contracting,
-  dc_w.country_code AS winner,
-  COUNT(*) AS awards
-FROM fact_tender ft
-JOIN dim_country dc_a ON ft.country_key = dc_a.country_key
-JOIN dim_country dc_w ON ft.winner_country_key = dc_w.country_key
-WHERE dc_a.country_code != dc_w.country_code
-GROUP BY dc_a.country_code, dc_w.country_code
-ORDER BY awards DESC;
-```
-
-**Query 3: Korrelation CPI mit Single-Bidder-Rate**
-```sql
-SELECT 
-  dc.country_code,
-  dc.cpi_score,
-  ft.year,
-  ROUND(100.0 * SUM(CAST(ft.F1 AS INT)) / COUNT(*), 2) AS sb_pct,
-  ROUND(100.0 * SUM(CAST(ft.F3 AS INT)) / COUNT(*), 2) AS nopc_pct
-FROM fact_tender ft
-JOIN dim_country dc ON ft.country_key = dc.country_key
-GROUP BY dc.country_code, ft.year
-ORDER BY dc.country_code, ft.year;
+WITH country_stats AS (
+    SELECT c.country_name,
+           ROUND(AVG(c.cpi_score), 2) AS avg_cpi,
+           ROUND(100.0 * SUM(CAST(f.F3 AS INT)) / NULLIF(COUNT(*), 0), 2) AS f3_rate
+    FROM fact_tender f
+    JOIN dim_country c ON f.country_key = c.country_key
+    WHERE f.F3 IS NOT NULL
+    GROUP BY c.country_name
+)
+SELECT * FROM country_stats
+PREFERRING HIGH avg_cpi PLUS LOW f3_rate;
 ```
 
 ---
@@ -373,4 +377,4 @@ python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 
 ---
 
-*Stand: 2026-05-19 (nach Audit-Fixes)*
+*Stand: 2026-06-18 (Challenge 4 SQL-Skripte abgeschlossen)*

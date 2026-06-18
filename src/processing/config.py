@@ -72,7 +72,7 @@ EXASOL_TYPE_MAP: Dict[str, str] = {
     "YEAR": "SMALLINT",
     "ISO_COUNTRY_CODE": "CHAR(2)",
     "winner_country": "CHAR(2)",
-    "winner_country_raw": "VARCHAR(100)",
+    "winner_country_raw": "VARCHAR(500)",
     "AWARD_VALUE_EURO": "DECIMAL(18,2)",
     "VALUE_EURO": "DECIMAL(18,2)",
     "NUMBER_OFFERS": "SMALLINT",

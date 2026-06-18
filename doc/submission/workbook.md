@@ -73,33 +73,35 @@ CREATE TABLE stg_wgi (
 
 ### 1. Technische Heterogenität
 
-- **TED:** CSV-Dateien — HTTP-Download vom TED-Portal
-- **CPI:** CSV-Datei — HTTP-Download
-- **WGI:** REST API — Aufruf über die `wbgapi` Python-Bibliothek
+TED und CPI werden als CSV-Dateien per HTTP-Download bezogen. WGI hingegen wird über eine REST API (`wbgapi`) abgefragt und liefert eine JSON-Antwort.
 
-> **Beispiel:** TED und CPI werden als CSV-Dateien heruntergeladen. WGI wird über eine REST API abgefragt — die JSON-Antwort wird im `download.py` in ein CSV-DataFrame überführt. Die ETL-Pipeline liefert einheitliche CSV-Dateien.
+> **Bewertung:** Es besteht technische Heterogenität — die Zugriffsprotokolle (HTTP-Download vs. REST API) und die Übertragungsformate (CSV vs. JSON) unterscheiden sich.
+>
+> **Lösung:** Die Unterschiede werden im Akquisitionsschritt gekapselt. Jede Datenquelle hat ein eigenes Download-Modul, das die rohen Daten in ein einheitliches CSV-Format überführt. Die nachgelagerte ETL-Pipeline verarbeitet nur diese vereinheitlichten CSV-Dateien — die ursprüngliche technische Heterogenität ist für sie transparent.
 
 ### 2. Data-Model-Heterogenität
 
-- **TED/CPI:** Tabellarisches Datenmodell — CSV → relational
-- **WGI:** API-JSON-Antwort — hierarchisch → nach CSV/DataFrame konvertiert
+TED und CPI liegen in einem tabellarischen Datenmodell vor: Jede Zeile entspricht einem Datensatz, jede Spalte einem Attribut. WGI liefert nach dem API-Aufruf eine hierarchische JSON-Struktur mit verschachtelten Objekten.
 
-> **Beispiel:** WGI-Rohdaten liegen als verschachteltes JSON vor. Das `download.py` extrahiert daraus ein tabellarisches Format, sodass alle drei Quellen als flache Tabellen weiterverarbeitet werden.
+> **Bewertung:** Es besteht Data-Model-Heterogenität — das flache, relationale Modell von TED/CPI steht dem hierarchischen JSON-Modell von WGI gegenüber.
+>
+> **Lösung:** Der Akquisitionsschritt für WGI extrahiert die relevanten Felder aus der JSON-Hierarchie und flacht sie in eine tabellarische Struktur ab (eine Zeile pro Land-Jahr-Indikator). Nach diesem Schritt liegen alle drei Quellen als flache Tabellen vor und können einheitlich weiterverarbeitet werden.
 
 ### 3. Syntaktische Heterogenität
 
-- **TED:** Dezimaltrennzeichen `.` (Euro-Beträge), Booleans (`BOOLEAN`), Datum auf `YEAR` reduziert
-- **CPI:** `cpi_score` als Ganzzahl (`SMALLINT`, 0–100)
-- **WGI:** 6 Dimensionen als `DECIMAL(5,2)`, Dezimaltrennzeichen `.`
+TED enthält große Dezimalzahlen (`DECIMAL(18,2)` für Euro-Beträge) und Booleans (Red Flags). CPI verwendet Ganzzahlen (`SMALLINT`, 0–100 für den Korruptionsscore). WGI liefert sechs normalisierte Dezimalwerte (`DECIMAL(5,2)`, Wertebereich ca. −2,5 bis +2,5).
 
-> **Beispiel:** `AVG(AWARD_VALUE_EURO)` (DECIMAL) und `AVG(cpi_score)` (SMALLINT) im gleichen Query liefern unterschiedliche numerische Präzision.
+> **Bewertung:** Es besteht syntaktische Heterogenität — die Datentypen der Attribute sind grundverschieden. Ohne Harmonisierung würde `AVG(AWARD_VALUE_EURO)` und `AVG(cpi_score)` im gleichen Query unterschiedliche numerische Präzision liefern.
+>
+> **Lösung:** Die Typkonvertierung erfolgt zentral in der ETL-Pipeline — jedem Quellattribut ist ein Exasol-Zieldatentyp zugeordnet. Die einheitlichen Typen im Staging- und Star-Schema stellen sicher, dass abfrageübergreifende Operationen mit konsistenter Präzision arbeiten.
 
 ### 4. Semantische Heterogenität
 
-- **TED:** ISO Alpha-2 Ländercodes — `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`
-- **CPI/WGI:** ISO Alpha-3 Ländercodes — `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`
+TED verwendet ISO Alpha-2 zur Länderkodierung: `ISO_COUNTRY_CODE = 'DE'`, `'DK'`, `'RO'`, `'HU'`. CPI und WGI verwenden dagegen ISO Alpha-3: `country_iso3 = 'DEU'`, `'DNK'`, `'ROU'`, `'HUN'`. Ohne Mapping würde `WHERE country = 'DE'` nur TED-Zeilen finden, aber keine CPI/WGI-Zeilen.
 
-> **Beispiel:** Ohne Mapping findet `WHERE country = 'DE'` nur TED-Zeilen. Lösung: `lookup_countries.csv` (bidirektionales alpha_2 ↔ alpha_3).
+> **Bewertung:** Es besteht semantische Heterogenität — derselbe reale Sachverhalt (ein Land) wird mit unterschiedlichen Kodierungssystemen repräsentiert.
+>
+> **Lösung:** Eine Lookup-Tabelle (`lookup_countries.csv`) enthält das bidirektionale Mapping Alpha-2 ↔ Alpha-3 für alle vier untersuchten Länder (DE, DK, RO, HU). Im ETL-Prozess wird sie für den Länderfilter auf TED sowie für den Join zwischen TED und CPI/WGI verwendet. Im Star-Schema wird der einheitliche Alpha-2-Code in `dim_country.country_code` gespeichert.
 
 ### 5. Strukturelle Heterogenität
 
@@ -109,14 +111,19 @@ CREATE TABLE stg_wgi (
 | Granularität | Pro Auftrag (`ID_AWARD`) | Pro Land-Jahr | Pro Land-Jahr |
 | Zeilenanzahl | ~1,78 Mio. (nach Dedup) | 40 (4 Länder × 10 Jahre) | 40 (4 Länder × 10 Jahre) |
 
-> **Beispiel:** Der Join von 1,78 Mio. Auftragseinträgen mit je 40 Governance-Zeilen erfordert SCD Typ 2 auf der Länderdimension — die Governance-Daten werden über alle Aufträge derselben Land-Jahr-Kombination repliziert.
+Die strukturellen Unterschiede zeigen sich in drei Dimensionen: Die Spaltenanzahl differiert stark (TED 25, CPI 3, WGI 8). Die Granularität ist inkompatibel — TED arbeitet auf Auftragsebene (~1,78 Mio. Zeilen), CPI und WGI auf der aggregierten Land-Jahr-Ebene (je 40 Zeilen). Die Zeilenanzahlen liegen um den Faktor ~44.000 auseinander.
+
+> **Bewertung:** Es besteht strukturelle Heterogenität auf allen drei Ebenen — Spaltenstruktur, Granularität und Datenvolumen sind grundverschieden.
+>
+> **Lösung:** Die Integration erfolgt über ein Star-Schema mit `dim_country` als SCD Typ 2. Die Governance-Scores (CPI/WGI) werden in der Länderdimension versioniert (`valid_from_year`/`valid_to_year`). Beim Join mit `fact_tender` werden die Scores über das passende Land-Jahr-Intervall auf jede Auftragszeile repliziert — so entsteht eine einheitliche Granularität auf Auftragsebene.
 
 ### 6. Schematische Heterogenität
 
-- **TED:** Primärschlüssel `ID_AWARD` (natürlicher Schlüssel); Großbuchstaben als Namenskonvention
-- **CPI/WGI:** `(country_iso3, year)` als konzeptioneller Schlüssel; Kleinschreibung mit Underscores
+Die Namenskonventionen unterscheiden sich systematisch: TED verwendet Großbuchstaben mit Unterstrichen (`ISO_COUNTRY_CODE`, `AWARD_VALUE_EURO`), CPI und WGI verwenden Kleinschreibung mit Underscores (`country_iso3`, `cpi_score`). Auch die Schlüsselstrategien differieren: TED besitzt einen expliziten natürlichen Primärschlüssel (`ID_AWARD`), während CPI und WGI einen impliziten, zusammengesetzten Schlüssel aus `country_iso3` und `year` nutzen.
 
-> **Beispiel:** `ISO_COUNTRY_CODE` (TED) vs. `country_iso3` (CPI/WGI) — gleicher semantischer Typ (Ländercode), aber abweichende Namen und Kodierungen. Gelöst durch `dim_country.country_code` als einheitliches Attribut im Star-Schema.
+> **Bewertung:** Es besteht schematische Heterogenität — sowohl die Benennung der Attribute als auch die Definition der Primärschlüssel folgen unterschiedlichen Konventionen.
+>
+> **Lösung:** Das Star-Schema definiert eine eigene, einheitliche Namenskonvention (Kleinschreibung mit Underscores, z. B. `award_value_eur`, `country_code`). Alle Quellattribute werden im ETL-Prozess auf diese Zielnamen gemappt. Die unterschiedlichen Schlüsselstrategien werden durch Surrogatschlüssel (`INTEGER IDENTITY`) in den Dimensionstabellen vereinheitlicht — `country_key` ersetzt sowohl `ISO_COUNTRY_CODE` als auch `country_iso3`.
 
 ---
 
@@ -140,7 +147,7 @@ CREATE TABLE stg_wgi (
 | `YEAR` (SMALLINT, 2014–2023) | `year` (SMALLINT, 2014–2023) | **Exakt** — identischer Name, Typ und Wertebereich |
 | *(keine WGI-Dimensionen in TED)* | 6× WGI-Scores (DECIMAL(5,2)) | **Neue Attribute** — nur in WGI, gejoint über (Land, Jahr) |
 
-> **Externer Lookup:** Die Datei [`lookup_countries.csv`](../../data/lookup/lookup_countries.csv) (4 Zeilen, `alpha_2` ↔ `alpha_3` ↔ `country_name`) wird im Python-ETL geladen und dient als Mapping-Hilfe für den TED-Länderfilter, den CPI/WGI-Join und die Ländernamen in `dim_country`. Sie wird **nicht** als separate Staging-Tabelle in Exasol importiert.
+> **Externer Lookup:** Eine Lookup-Tabelle (`lookup_countries.csv`, 4 Zeilen) stellt das bidirektionale Mapping `alpha_2` ↔ `alpha_3` ↔ `country_name` für die vier untersuchten Länder bereit. Sie wird im ETL-Prozess für den TED-Länderfilter, den CPI/WGI-Join und die Ländernamen in `dim_country` genutzt und **nicht** als separate Staging-Tabelle in Exasol importiert.
 
 ### CPI → WGI Schema Matching
 
@@ -207,7 +214,7 @@ CREATE TABLE fact_tender (
 );
 ```
 
-- **Eine Zeile pro `ID_AWARD`** (CORRECTIONS-bewusster Dedup). `ID_NOTICE_CAN` und `ID_LOT` als degenerierte Dimensionen.
+- **Eine Zeile pro `ID_AWARD`** (Deduplizierung unter Berücksichtigung von CORRECTIONS-Einträgen). `ID_NOTICE_CAN` und `ID_LOT` als degenerierte Dimensionen.
 - **Role-Playing:** `dim_country` wird zweimal referenziert — `country_key` (Auftraggeber-Land), `winner_country_key` (Gewinner-Land).
 - **Red Flags:** 6 Einzelflags (F1–F3, F5–F7) + 4 Kombinationen. F4 wurde verworfen (99,16% NULL).
 - **AWARD_VALUE_EURO:** Sentinel-Entfernung (€10T → NaN) — kein Perzentil-Clipping.
@@ -257,7 +264,7 @@ CREATE TABLE dim_procedure_type (
 
 *IMPORT-Befehle zum Laden der bereinigten CSV-Dateien in die Staging-Tabellen. (Exercise Sheet 3, Exercise 2.1)*
 
-**Quelldatei-Eigenschaften (definiert durch die Python-ETL-Pipeline — [`export_csv()`](../../src/processing/utils.py) schreibt UTF-8, LF, Komma-getrennt):**
+**Quelldatei-Eigenschaften (von der ETL-Pipeline einheitlich produziert — UTF-8, LF, Komma-getrennt):**
 
 | Eigenschaft | TED CSV | CPI CSV | WGI CSV |
 |----------|---------|---------|---------|
@@ -269,8 +276,7 @@ CREATE TABLE dim_procedure_type (
 | Dezimalzeichen | `.` (Punkt) | — (Ganzzahlen) | `.` (Punkt) |
 | Tausendertrenner | Keiner | Keiner | Keiner |
 
-**Voraussetzung:** Die CSV-Dateien werden von der ETL-Pipeline automatisch produziert
-(`python -m src.processing.run_cleanup` → CSV in `data/processed/*/`).
+**Voraussetzung:** Die CSV-Dateien werden vom ETL-Prozess automatisch produziert und im Verzeichnis `data/processed/` abgelegt.
 
 **Fehlertabelle (wird von Exasol automatisch beim ersten `ERRORS INTO` angelegt):**
 
@@ -283,7 +289,7 @@ CSV_DATA    VARCHAR(2000000) UTF8
 
 > Kein manuelles `CREATE TABLE` nötig — Exasol erzeugt `error_tbl` selbst.
 
-**IMPORT-Skript (auch unter [`src/dw/ddl/import_staging.sql`](../../src/dw/ddl/import_staging.sql)):**
+**IMPORT-Skript:**
 
 ```sql
 OPEN SCHEMA JOHANNES_RAMSER;

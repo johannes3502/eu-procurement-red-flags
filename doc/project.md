@@ -277,14 +277,18 @@ Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.m
 | **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ Abgeschlossen — `run_cleanup.py` produziert Parquet + CSV |
 | **Exasol DDL + Automation** (`setup_and_load.py` — DDL, Parquet-Load via `import_from_pandas()`, INSERTs, Verify) | ✅ Abgeschlossen — alle 7 Tabellen erstellt, 1.784.558 TED-Zeilen + CPI/WGI geladen, 2 Beispielzeilen pro Star-Schema-Tabelle |
 | **Nativer IMPORT FROM LOCAL CSV (Challenge 3)** | ✅ Abgeschlossen — `import_staging.sql` enthält die nativen IMPORT-Statements; ausgeführt in DBeaver, 1,784,558 + 40 + 40 Zeilen geladen, `error_tbl` enthält 0 Fehler |
-| Analyse-Queries & Visualisierung | 📋 Geplant |
+| **Data Quality & Entity Matching (Challenge 4)** | ✅ Abgeschlossen — `data_quality_checks.sql`: error_info-Spalten, Duplikaterkennung, Sentinel-Entfernung, Entity-Matching (Equal/Levenshtein/Soundex), FP/FN-Analyse |
+| **MERGE & Data Integration (Challenge 4)** | ✅ Abgeschlossen — `merge_dimensions.sql`: MERGE dim_procedure_type + dim_cpv, SCD Type 2 dim_country (INSERT+UPDATE), INSERT fact_tender mit Role-Playing-Join |
+| **Analytical Queries (Challenge 4)** | ✅ Abgeschlossen — `analytical_queries.sql`: 7 Queries (ROLLUP, Window AVG, RANK, CORR/STDDEV_POP, Skyline PREFERRING, Krisenvergleich, Lot-Fragmentierung) |
+| **Workbook Challenge 4** | ✅ Abgeschlossen — `exercises/Challenge4.md` vollständig ausgefüllt (Name, Titel, 5 Data-Transformation-Antworten, MERGE-Kommando, 7 Queries) |
+| SQL-Ausführung auf Exasol | 📋 Ausstehend — Skripte müssen in DBeaver auf dem Uni-VPN-Exasol ausgeführt werden |
 
 **Nächste Schritte:**
-- Beispiel-Queries entwickeln (5 natürlichsprachige Queries liegen vor, siehe §10)
-- Visualisierung in Tableau/Power BI/Superset
-- ggf. Vergleich mit zusätzlichen Ländern oder Jahren
+- SQL-Skripte in DBeaver auf Uni-VPN-Exasol ausführen (data_quality_checks → merge_dimensions → analytical_queries)
+- Workbook → PDF exportieren und via ELO einreichen
+- ggf. Visualisierung in Tableau/Power BI/Superset
 
 ---
 
-*Stand: Mai 2026 (dritte Revision)*
-*Data Preparation Plan abgeschlossen – ETL-Core implementiert (per‑dataset Submodule: config/utils/ted.clean/cpi.clean/wgi.clean/run_cleanup) – nächste: Dimensionen & Faktentabelle.*
+*Stand: Juni 2026 (vierte Revision)*
+*Challenge 4 abgeschlossen — Data Quality Checks, MERGE/SCD2-Integration, 7 analytische Queries (ROLLUP, Window, RANK, CORR/STDDEV, Skyline, Krisenvergleich, Fragmentierung). SQL-Skripte bereit zur Ausführung in DBeaver auf Uni-VPN-Exasol.*
