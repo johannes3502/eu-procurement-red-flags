@@ -227,10 +227,15 @@ data/*
 /logs/
 *.log
 
+# Power BI — .pbix is a binary with potential embedded credentials
+src/powerbi/report.pbix
+
 # personal
 presentation_questions.md
 
 /temp/
+logs/
 doc/profiling/
+doc/submission/
 src/dw/ddl/reset_staging.sql
 src/dw/reset_staging.py

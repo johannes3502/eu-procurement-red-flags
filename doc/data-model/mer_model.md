@@ -1,7 +1,6 @@
-# ME/R Model — Star Schema (Diagram)
+﻿# ME/R Model — Star Schema (Diagram)
 
 **Project:** Red Flags Procurement Governance  
-**Exercise:** 1 (Data Modelling)  
 **Format:** [Mermaid.js](https://mermaid.live) — mit der Mermaid-Erweiterung in VS Code (`Strg+Shift+V`) renderbar
 
 ---
@@ -88,7 +87,7 @@ erDiagram
 
 ## Design-Merkmale
 
-1. **Kein `dim_time`:** `year` und `crisis_type` sind in `fact_tender` eingebettet (Vorgabe der Exercise)
+1. **Kein `dim_time`:** `year` und `crisis_type` sind in `fact_tender` eingebettet (design specification)
 2. **Kein `F4`:** Beschleunigtes Verfahren wurde gestrichen (99,16 % NULL)
 3. **SCD Type 2:** `dim_country` nutzt `valid_from_year`/`valid_to_year` zur Versionierung von Governance-Scores
 4. **FK-Namen = PK-Namen:** `country_key` in `fact_tender` referenziert `country_key` in `dim_country`

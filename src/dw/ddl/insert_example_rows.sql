@@ -1,3 +1,4 @@
+-- IMPORTANT: Set your schema in DBeaver before running. The default schema is 'procurement_governance'.
 
 INSERT INTO dim_country (country_code, country_name, cpi_score,
     control_of_corruption, government_effectiveness, political_stability,

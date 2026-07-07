@@ -1,7 +1,7 @@
-# Mehrdimensionale Analyse von Auffälligkeiten in EU-Vergabedaten (TED) mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
+﻿# Mehrdimensionale Analyse von Auffälligkeiten in EU-Vergabedaten (TED) mit externen Governance‑Scores (CPI/WGI) – Ein Data‑Warehouse‑Ansatz
 
-**Data-Warehouse-Projekt Sommersemester 2026**
-**Autor:** Johannes, OTH Regensburg
+**Data Warehouse Project**
+**Author:** Johannes
 
 ---
 
@@ -201,7 +201,7 @@ Die Governance-Scores sind **keine eigene Dimension**, sondern Attribute der Lä
 ```
 
 - **Faktentabelle:** `fact_tender` – ein Eintrag pro **ID_AWARD** (nach CORRECTIONS-aware Dedup). `ID_NOTICE_CAN` und `ID_LOT` als **degenerierte Dimensionen**.
-- **Dimensionen:** Kein `dim_time` (Exercise-Vorgabe: Jahr + crisis_type direkt in fact), Land (SCD Type 2 mit CPI/WGI), CPV (mit Hierarchie), Verfahrenstyp.
+- **Dimensionen:** Kein `dim_time` (design specification: Jahr + crisis_type direkt in fact), Land (SCD Type 2 mit CPI/WGI), CPV (mit Hierarchie), Verfahrenstyp.
 - **Role-Playing:** `dim_country` wird zweimal referenziert: `country_key` = Auftraggeber-Land (`ISO_COUNTRY_CODE`), `winner_country_key` = Gewinner-Land (geparst aus `WIN_COUNTRY_CODE`).
 - **Red Flags:** 6 Flags (F1–F3, F5–F7) + 4 Kombinationen. F4 gestrichen.
 - **AWARD_VALUE_EURO:** Nur Sentinel-Entfernung (62 Zeilen mit exakt €10T → NaN). Kein Clipping — echte Auftragswerte bleiben unverändert.
@@ -213,7 +213,7 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 
 ## 12. Krisen-Dimension
 
-- **Attribut in `fact_tender`:** `crisis_type` mit den Ausprägungen `'keine Krise'` (2014–2019), `'COVID-19'` (2020–2021), `'Ukraine-Krieg'` (2022–2023). Keine separate `dim_time`-Tabelle (Exercise-Vorgabe); `year` und `crisis_type` sind direkt in die Faktentabelle eingebettet.
+- **Attribut in `fact_tender`:** `crisis_type` mit den Ausprägungen `'keine Krise'` (2014–2019), `'COVID-19'` (2020–2021), `'Ukraine-Krieg'` (2022–2023). Keine separate `dim_time`-Tabelle (design specification); `year` und `crisis_type` sind direkt in die Faktentabelle eingebettet.
 - Die Zuordnung erfolgt **jahresweise**; das ist hinreichend genau, da auch die Governance-Scores nur jährlich vorliegen und die Analysen auf Jahresaggregate abzielen.
 - Bei Bedarf kann die Granularität später auf Monate verfeinert werden.
 
@@ -232,7 +232,7 @@ Das Sternschema kann durch Auslagerung der CPV‑Hierarchie (Division → Group 
 
 ## 14. Zeitungs-Schlagzeile
 
-> *„Forscher der OTH Regensburg decken auf: In EU-Staaten mit schwacher Governance ist die Quote intransparenter Direktvergaben dreimal so hoch – Pandemiejahre verstärken den Effekt.“*
+> *„researchers decken auf: In EU-Staaten mit schwacher Governance ist die Quote intransparenter Direktvergaben dreimal so hoch – Pandemiejahre verstärken den Effekt.“*
 
 ---
 
@@ -276,19 +276,12 @@ Alle Ergebnisse sind konsolidiert in [`doc/profiling/analysis/analysis_results.m
 | Data Preparation Plan (vollständige ETL-Spezifikation) | ✅ Abgeschlossen |
 | **ETL‑Core** (`config.py` + `utils.py` + `ted/clean.py` + `cpi/clean.py` + `wgi/clean.py` + `run_cleanup.py`) | ✅ Abgeschlossen — `run_cleanup.py` produziert Parquet + CSV |
 | **Exasol DDL + Automation** (`setup_and_load.py` — DDL, Parquet-Load via `import_from_pandas()`, INSERTs, Verify) | ✅ Abgeschlossen — alle 7 Tabellen erstellt, 1.784.558 TED-Zeilen + CPI/WGI geladen, 2 Beispielzeilen pro Star-Schema-Tabelle |
-| **Nativer IMPORT FROM LOCAL CSV (Challenge 3)** | ✅ Abgeschlossen — `import_staging.sql` enthält die nativen IMPORT-Statements; ausgeführt in DBeaver, 1,784,558 + 40 + 40 Zeilen geladen, `error_tbl` enthält 0 Fehler |
-| **Data Quality & Entity Matching (Challenge 4)** | ✅ Abgeschlossen — `data_quality_checks.sql`: error_info-Spalten, Duplikaterkennung, Sentinel-Entfernung, Entity-Matching (Equal/Levenshtein/Soundex), FP/FN-Analyse |
-| **MERGE & Data Integration (Challenge 4)** | ✅ Abgeschlossen — `merge_dimensions.sql`: MERGE dim_procedure_type + dim_cpv, SCD Type 2 dim_country (INSERT+UPDATE), INSERT fact_tender mit Role-Playing-Join |
-| **Analytical Queries (Challenge 4)** | ✅ Abgeschlossen — `analytical_queries.sql`: 7 Queries (ROLLUP, Window AVG, RANK, CORR/STDDEV_POP, Skyline PREFERRING, Krisenvergleich, Lot-Fragmentierung) |
-| **Workbook Challenge 4** | ✅ Abgeschlossen — `exercises/Challenge4.md` vollständig ausgefüllt (Name, Titel, 5 Data-Transformation-Antworten, MERGE-Kommando, 7 Queries) |
-| SQL-Ausführung auf Exasol | 📋 Ausstehend — Skripte müssen in DBeaver auf dem Uni-VPN-Exasol ausgeführt werden |
+| **Native IMPORT FROM LOCAL CSV** | ✅ Abgeschlossen — `import_staging.sql` enthält die nativen IMPORT-Statements; ausgeführt in DBeaver, 1,784,558 + 40 + 40 Zeilen geladen, `error_tbl` enthält 0 Fehler |
+| **Data Quality & Entity Matching** | ✅ Abgeschlossen — `data_quality_checks.sql`: error_info-Spalten, Duplikaterkennung, Sentinel-Entfernung, Entity-Matching (Equal/Levenshtein/Soundex), FP/FN-Analyse |
+| **MERGE & Data Integration** | ✅ Abgeschlossen — `merge_dimensions.sql`: MERGE dim_procedure_type + dim_cpv, SCD Type 2 dim_country (INSERT+UPDATE), INSERT fact_tender mit Role-Playing-Join |
+| **Analytical Queries** | ✅ Abgeschlossen — `analytical_queries.sql`: 7 Queries (ROLLUP, Window AVG, RANK, CORR/STDDEV_POP, Skyline PREFERRING, Krisenvergleich, Lot-Fragmentierung) |
 
-**Nächste Schritte:**
-- SQL-Skripte in DBeaver auf Uni-VPN-Exasol ausführen (data_quality_checks → merge_dimensions → analytical_queries)
-- Workbook → PDF exportieren und via ELO einreichen
-- ggf. Visualisierung in Tableau/Power BI/Superset
 
 ---
 
-*Stand: Juni 2026 (vierte Revision)*
-*Challenge 4 abgeschlossen — Data Quality Checks, MERGE/SCD2-Integration, 7 analytische Queries (ROLLUP, Window, RANK, CORR/STDDEV, Skyline, Krisenvergleich, Fragmentierung). SQL-Skripte bereit zur Ausführung in DBeaver auf Uni-VPN-Exasol.*
+*Stand: June 2026*

@@ -1,3 +1,5 @@
+-- IMPORTANT: Set your schema in DBeaver before running. The default schema is 'procurement_governance'.
+
 CREATE TABLE dim_country (
     country_key        INTEGER IDENTITY NOT NULL,
     country_code       CHAR(2)          NOT NULL,

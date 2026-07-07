@@ -7,7 +7,7 @@ One script to rule them all:
     3. Load cleaned parquet files (CPI, WGI, TED)
     4. Insert example rows (2 per table)
     5. Verify row counts and show sample join
-    6. Print final report for workbook
+    6. Print final summary
 
 Usage:
     python src/dw/setup_and_load.py                # Full pipeline
@@ -88,6 +88,8 @@ def get_connection(schema=None):
         encryption=True,
         websocket_sslopt={"cert_reqs": ssl.CERT_NONE},
     )
+    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+    conn.execute(f"OPEN SCHEMA {schema}")
     return conn, schema
 
 
@@ -260,6 +262,9 @@ def load_parquet_files(conn):
         cols = len(df.columns)
         logger.info("Read: %s rows x %s cols in %.1fs", f"{rows:,}", cols, t1 - t0)
 
+        if "error_info" not in df.columns and "ERROR_INFO" not in [c.upper() for c in df.columns]:
+            df["error_info"] = None
+
         conn.execute(f"TRUNCATE TABLE {table_name}")
 
         t0 = time.time()
@@ -364,7 +369,7 @@ def verify_and_report(conn):
         logger.warning("Join query failed (OK if fact_tender is empty): %s", e)
 
     # Workbook numbers
-    logger.info("Workbook Numbers (copy to workbook.md)")
+    logger.info("Summary")
     logger.info("-" * 50)
     if "stg_ted" in counts:
         logger.info("  Number of rows in biggest table:  %s", f"{counts['stg_ted']:,}")

@@ -1,22 +1,19 @@
+-- IMPORTANT: Set your schema in DBeaver before running. The default schema is 'procurement_governance'.
+
 --
 -- data_quality_checks.sql
--- Exercise Sheet 4, Exercise 1: Data Quality Checks, Entity Matching, Deduplication
--- 
--- Ausführen im Schema JOHANNES_RAMSER auf dem Uni-Exasol (via VPN, DBeaver).
+-- Data Quality Checks, Entity Matching, Deduplication
 --
-
-OPEN SCHEMA JOHANNES_RAMSER;
-
 
 -- ===========================================================================
 -- A.1: error_info-Spalte hinzufügen
--- Erstmalig ausführen. Bei Re-Run: Diese 3 Zeilen manuell überspringen.
+-- VOR dem ersten Run: Diese 3 Zeilen einzeln ausführen.
+-- Bei Re-Run: Überspringen (Spalten existieren bereits).
 -- ===========================================================================
 
-ALTER TABLE stg_ted ADD COLUMN error_info VARCHAR(2000);
-ALTER TABLE stg_cpi ADD COLUMN error_info VARCHAR(2000);
-ALTER TABLE stg_wgi ADD COLUMN error_info VARCHAR(2000);
-
+-- ALTER TABLE stg_ted ADD COLUMN error_info VARCHAR(2000);
+-- ALTER TABLE stg_cpi ADD COLUMN error_info VARCHAR(2000);
+-- ALTER TABLE stg_wgi ADD COLUMN error_info VARCHAR(2000);
 
 -- ===========================================================================
 -- A.2: Duplikaterkennung innerhalb jeder Quelltabelle

@@ -1,4 +1,4 @@
-# Technische Dokumentation – Red Flags Procurement Governance
+﻿# Technische Dokumentation – Red Flags Procurement Governance
 
 *Detaillierte Beschreibung der Architektur, Implementierung und Datenverarbeitung*
 
@@ -55,9 +55,9 @@ red-flags-procurement-governance/
 │   │       ├── create_staging_tables.sql
 │   │       ├── insert_example_rows.sql
 │   │       ├── import_staging.sql
-│   │       ├── data_quality_checks.sql    # Challenge 4: error_info, Dedup, Entity Matching
-│   │       ├── merge_dimensions.sql       # Challenge 4: MERGE + INSERT fact_tender
-│   │       └── analytical_queries.sql     # Challenge 4: 7 analytische Queries
+│   │       ├── data_quality_checks.sql    # Data Quality: error_info, Dedup, Entity Matching
+│   │       ├── merge_dimensions.sql       # MERGE + INSERT fact_tender
+│   │       └── analytical_queries.sql     # 7 Analytical Queries
 │   └── log/
 ├── data/
 │   ├── raw/                    # Rohdaten (ted_<YYYY>.csv, cpi_raw.csv, wgi_raw.csv)
@@ -174,7 +174,7 @@ Hungary,HU,HUN,true
 | `comb_no_call_high_value` | BOOLEAN | F3 AND F6 |
 | `comb_frag_single` | BOOLEAN | F7 AND F1 |
 
-> **F4 gestrichen** (99,16 % NULL). **Kein dim_time** (Exercise-Vorgabe: year + crisis_type direkt in fact). **Role-Playing:** dim_country wird zweimal referenziert.
+> **F4 gestrichen** (99,16 % NULL). **Kein dim_time** (design specification: year + crisis_type direkt in fact). **Role-Playing:** dim_country wird zweimal referenziert.
 
 ### 4.2 Dimensionen
 
@@ -267,7 +267,7 @@ python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 
 ---
 
-## 6. Analyse-Queries (Challange 4 — 7 Queries)
+## 6. Analyse-Queries (7 Queries)
 
 Die vollständigen Queries liegen in [`src/dw/ddl/analytical_queries.sql`](src/dw/ddl/analytical_queries.sql):
 
@@ -377,4 +377,4 @@ python -m src.processing.run_cleanup --years 2020 2021 2022 --log-level DEBUG
 
 ---
 
-*Stand: 2026-06-18 (Challenge 4 SQL-Skripte abgeschlossen)*
+*Stand: 2026-06-18 *

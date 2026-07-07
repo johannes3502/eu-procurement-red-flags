@@ -1,7 +1,7 @@
-# Snowflake Schema Variant — Exercise 1 (Data Modelling)
+﻿# Snowflake Schema Variant — Data Modelling
 
 **Project:** Red Flags Procurement Governance  
-**Author:** Johannes, OTH Regensburg
+**Author:** Johannes
 
 ---
 
@@ -87,4 +87,4 @@ None of these conditions apply to this project.
 
 ---
 
-*Document prepared 2026-05-17 for Exercise 1 — Data Modelling.*
+*Document prepared 2026-05-17 .*

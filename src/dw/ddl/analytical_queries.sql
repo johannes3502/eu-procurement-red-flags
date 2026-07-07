@@ -1,12 +1,10 @@
+-- IMPORTANT: Set your schema in DBeaver before running. The default schema is 'procurement_governance'.
+
 --
 -- analytical_queries.sql
--- Exercise Sheet 5: 7 Analytical Queries for Challenge 4
+-- Seven Analytical Queries
 --
--- Ausführen NACH merge_dimensions.sql im Schema JOHANNES_RAMSER.
---
-
-OPEN SCHEMA JOHANNES_RAMSER;
-
+-- Run AFTER merge_dimensions.sql
 
 -- ===========================================================================
 -- Q1: GROUPING SETS / ROLLUP

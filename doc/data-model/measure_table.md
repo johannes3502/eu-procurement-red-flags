@@ -1,7 +1,7 @@
-# Measure Table — Exercise 1 (Data Modelling)
+﻿# Measure Table — Data Modelling
 
 **Project:** Red Flags Procurement Governance — Star Schema  
-**Author:** Johannes, OTH Regensburg
+**Author:** Johannes
 
 ---
 
@@ -65,7 +65,7 @@ These are **not measures** but are numeric/quantifiable attributes that appear i
 | `voice_accountability` | `dim_country` | `DECIMAL(5,2)` | [-2.5, +2.5] | **STOCK** | WGI dimension — point-in-time |
 | `valid_from_year` | `dim_country` | `SMALLINT` | [2014, 2023] | **STOCK** | SCD Type 2 start year |
 | `valid_to_year` | `dim_country` | `SMALLINT` | [2014, 9999] | **STOCK** | SCD Type 2 end year (9999 = current) |
-| `year` | `fact_tender` | `SMALLINT` | [2014, 2023] | — | Embedded in fact table per exercise spec |
+| `year` | `fact_tender` | `SMALLINT` | [2014, 2023] | — | Embedded in fact table per design spec |
 | `transparency_level` | `dim_procedure_type` | `SMALLINT` | [0, 5] | **STOCK** | Fixed per procedure type |
 | `is_open` | `dim_procedure_type` | `BOOLEAN` | {FALSE, TRUE} | — | Whether procedure is competitive/open |
 
@@ -79,4 +79,4 @@ These are **not measures** but are numeric/quantifiable attributes that appear i
 | **VPU** (semi-additive) | 10 | F1–F3, F5–F7 (6) + 4 combinations |
 | **STOCK** (non-additive) | 0 in fact (all in dims) | CPI/WGI scores, transparency levels |
 
-*Document prepared 2026-05-17 for Exercise 1 — Data Modelling.*
+*Document prepared 2026-05-17 .*
