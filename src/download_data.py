@@ -100,7 +100,7 @@ def _print_summary(results: list[dict]) -> None:
     print("  DOWNLOAD SUMMARY — Red Flags Procurement Governance")
     print("=" * 72)
     for r in results:
-        marker = "✓" if r["status"] == "OK" else "✗"
+        marker = "OK" if r["status"] == "OK" else "FAIL"
         print(
             f"  {marker} [{r['dataset']:>4s}] "
             f"{r['file']:<30s} {r['size']:>10s}"

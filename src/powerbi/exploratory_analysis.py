@@ -1,7 +1,6 @@
 """
-Exploratory Analysis — Red Flags Procurement Governance
-Runs analytical queries against Exasol (via ODBC) to verify data plausibility
-before building Power BI visualizations.
+Exploratory Analysis -- Red Flags Procurement Governance
+Runs analytical queries against Exasol via pyexasol.
 
 Prerequisites: Copy .env.template to .env and fill in your Exasol credentials.
 
@@ -10,17 +9,28 @@ Usage:  python src/powerbi/exploratory_analysis.py
 
 import sys
 import os
+import ssl
 from pathlib import Path
-import textwrap
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Load .env file
+_env_path = PROJECT_ROOT / ".env"
+if _env_path.exists():
+    with open(_env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                os.environ[key.strip()] = val.strip()
 
 
 def _require_env(key: str) -> str:
     value = os.environ.get(key, "").strip()
     if not value:
-        print(f"[FAIL]  Environment variable {key} is not set. Copy .env.template to .env and fill in your credentials.")
+        print(f"[FAIL] Environment variable {key} is not set.")
+        print("       Copy .env.template to .env and fill in your credentials.")
         sys.exit(1)
     return value
 
@@ -31,23 +41,30 @@ EXASOL_USER = _require_env("EXASOL_USER")
 EXASOL_PASSWORD = _require_env("EXASOL_PASSWORD")
 SCHEMA = _require_env("EXASOL_SCHEMA")
 
-ODBC_CS = f"Driver={{Exasol Driver}};EXAHOST={EXASOL_HOST}:{EXASOL_PORT}/nocertcheck"
+HOST_PORT = f"{EXASOL_HOST}:{EXASOL_PORT}"
 
 print("=" * 72)
-print("EXPLORATORY ANALYSIS — Red Flags Procurement Governance")
+print("EXPLORATORY ANALYSIS -- Red Flags Procurement Governance")
 print("=" * 72)
 print()
 
 try:
-    import pyodbc
-    conn = pyodbc.connect(ODBC_CS, uid=EXASOL_USER, pwd=EXASOL_PASSWORD, timeout=15)
-    cur = conn.cursor()
-    print(f"[OK]  Connected to Exasol via ODBC ({EXASOL_HOST})")
-    print(f"      Schema: {SCHEMA}")
+    import pyexasol
+    conn = pyexasol.connect(
+        dsn=HOST_PORT,
+        user=EXASOL_USER,
+        password=EXASOL_PASSWORD,
+        compression=True,
+        encryption=True,
+        websocket_sslopt={"cert_reqs": ssl.CERT_NONE},
+    )
+    conn.execute(f"OPEN SCHEMA {SCHEMA}")
+    print(f"[OK] Connected to Exasol ({EXASOL_HOST})")
+    print(f"     Schema: {SCHEMA}")
     print()
 except Exception as e:
     msg = str(e).split("\n")[0][:150]
-    print(f"[FAIL]  Connection error: {msg}")
+    print(f"[FAIL] Connection error: {msg}")
     print()
     print(f">> Host: {EXASOL_HOST}:{EXASOL_PORT}")
     print(">> Is the Exasol instance reachable? Check VPN or network settings.")
@@ -58,9 +75,9 @@ def run_query(label: str, sql: str) -> list:
     print("-" * 72)
     print(label)
     print("-" * 72)
-    cur.execute(sql)
-    rows = cur.fetchall()
-    cols = [d[0] for d in cur.description]
+    stmt = conn.execute(sql)
+    cols = list(stmt.columns().keys())
+    rows = stmt.fetchall()
     widths = {c: max(len(c), 10) for c in cols}
     for r in rows:
         for i, c in enumerate(cols):
@@ -73,7 +90,11 @@ def run_query(label: str, sql: str) -> list:
         print("  (no rows)")
     else:
         for r in rows:
-            vals = [str(r[i]).ljust(widths[cols[i]]) if r[i] is not None else "NULL".ljust(widths[cols[i]]) for i in range(len(cols))]
+            vals = [
+                str(r[i]).ljust(widths[cols[i]]) if r[i] is not None
+                else "NULL".ljust(widths[cols[i]])
+                for i in range(len(cols))
+            ]
             print(" | ".join(vals))
     print()
     return rows
@@ -82,19 +103,19 @@ def run_query(label: str, sql: str) -> list:
 S = SCHEMA
 
 run_query("Q1: Row counts per table", f"""
-    SELECT 'fact_tender'       AS tabelle, COUNT(*) AS zeilen FROM {S}.fact_tender
+    SELECT 'fact_tender'       AS table_name, COUNT(*) AS row_count FROM {S}.fact_tender
     UNION ALL
     SELECT 'dim_country',      COUNT(*) FROM {S}.dim_country
     UNION ALL
     SELECT 'dim_cpv',          COUNT(*) FROM {S}.dim_cpv
     UNION ALL
     SELECT 'dim_procedure_type',COUNT(*) FROM {S}.dim_procedure_type
-    ORDER BY tabelle
+    ORDER BY table_name
 """)
 
-run_query("Q2: Tenders per country + NULL check", f"""
+run_query("Q2: Tenders per country", f"""
     SELECT
-        COALESCE(c.country_name, '*** NULL key ***') AS land,
+        COALESCE(c.country_name, '*** NULL key ***') AS country,
         COUNT(*)      AS tenders,
         ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 1) AS pct_total
     FROM {S}.fact_tender f
@@ -112,38 +133,38 @@ run_query("Q3: Tenders per year (all countries)", f"""
 
 run_query("Q4: Overall Red-Flag rates (global, all years)", f"""
     SELECT
-        ROUND(100.0 * AVG(CASE WHEN F1 THEN 1 ELSE 0 END), 1) AS "f1_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F2 THEN 1 ELSE 0 END), 1) AS "f2_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F3 THEN 1 ELSE 0 END), 1) AS "f3_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F5 THEN 1 ELSE 0 END), 1) AS "f5_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F6 THEN 1 ELSE 0 END), 1) AS "f6_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F7 THEN 1 ELSE 0 END), 1) AS "f7_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN F1 OR F2 OR F3 OR F5 OR F6 OR F7 THEN 1 ELSE 0 END), 1) AS "overall_%"
+        ROUND(100.0 * AVG(CASE WHEN F1 THEN 1 ELSE 0 END), 1) AS f1_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F2 THEN 1 ELSE 0 END), 1) AS f2_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F3 THEN 1 ELSE 0 END), 1) AS f3_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F5 THEN 1 ELSE 0 END), 1) AS f5_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F6 THEN 1 ELSE 0 END), 1) AS f6_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F7 THEN 1 ELSE 0 END), 1) AS f7_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN F1 OR F2 OR F3 OR F5 OR F6 OR F7 THEN 1 ELSE 0 END), 1) AS overall_pct
     FROM {S}.fact_tender
 """)
 
-run_query("Q5 ** Red-Flag rates per country (F1, F3, F6, Overall)", f"""
+run_query("Q5: Red-Flag rates per country (F1, F3, F6, Overall)", f"""
     SELECT
-        c.country_name AS land,
+        c.country_name AS country,
         COUNT(*) AS tenders,
-        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS "f1_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F3 THEN 1 ELSE 0 END), 1) AS "f3_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS "f6_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS "overall_%"
+        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS f1_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F3 THEN 1 ELSE 0 END), 1) AS f3_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS f6_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS overall_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_country c ON f.country_key = c.country_key
     GROUP BY c.country_name
-    ORDER BY "overall_%" DESC
+    ORDER BY overall_pct DESC
 """)
 
-run_query("Q6 ** Governance scores per country (CPI + WGI)", f"""
+run_query("Q6: Governance scores per country (CPI + WGI)", f"""
     SELECT
-        country_name AS land,
+        country_name AS country,
         cpi_score AS cpi,
-        control_of_corruption AS "corrupt_control",
-        government_effectiveness AS "gov_eff",
+        control_of_corruption AS corrupt_control,
+        government_effectiveness AS gov_eff,
         rule_of_law,
-        political_stability AS "pol_stab",
+        political_stability AS pol_stab,
         valid_from_year,
         valid_to_year
     FROM {S}.dim_country
@@ -151,39 +172,39 @@ run_query("Q6 ** Governance scores per country (CPI + WGI)", f"""
     ORDER BY cpi_score DESC
 """)
 
-run_query("Q7 ** CPI vs F1-Rate per country x year (correlation check)", f"""
+run_query("Q7: CPI vs F1-Rate per country x year", f"""
     SELECT
-        c.country_name AS land,
+        c.country_name AS country,
         f."year",
         ROUND(AVG(c.cpi_score), 1) AS cpi,
-        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS "f1_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS "f6_rate_%"
+        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS f1_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS f6_rate_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_country c ON f.country_key = c.country_key
     GROUP BY c.country_name, f."year"
     ORDER BY c.country_name, f."year"
 """)
 
-run_query("Q8 ** Crisis impact: F6-Rate per country x crisis_type", f"""
+run_query("Q8: Crisis impact -- F6-Rate per country x crisis_type", f"""
     SELECT
-        c.country_name AS land,
-        f.crisis_type AS krisenphase,
+        c.country_name AS country,
+        f.crisis_type AS crisis_phase,
         COUNT(*) AS tenders,
-        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS "f6_rate_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS "overall_%"
+        ROUND(100.0 * AVG(CASE WHEN f.F6 THEN 1 ELSE 0 END), 1) AS f6_rate_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS overall_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_country c ON f.country_key = c.country_key
     GROUP BY c.country_name, f.crisis_type
     ORDER BY c.country_name, f.crisis_type
 """)
 
-run_query("Q9 ** Top 10 CPV divisions by tender volume", f"""
+run_query("Q9: Top 10 CPV divisions by tender volume", f"""
     SELECT
         d.cpv_division AS cpv_div,
         COUNT(*) AS tenders,
-        ROUND(SUM(f.award_value_eur) / 1e9, 2) AS "wert_MrdEUR",
-        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS "overall_risiko_%",
-        ROUND(100.0 * AVG(CASE WHEN f.F2 THEN 1 ELSE 0 END), 1) AS "f2_%"
+        ROUND(SUM(f.award_value_eur) / 1e9, 2) AS value_bn_eur,
+        ROUND(100.0 * AVG(CASE WHEN f.F1 OR f.F2 OR f.F3 OR f.F5 OR f.F6 OR f.F7 THEN 1 ELSE 0 END), 1) AS overall_risk_pct,
+        ROUND(100.0 * AVG(CASE WHEN f.F2 THEN 1 ELSE 0 END), 1) AS f2_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_cpv d ON f.cpv_key = d.cpv_key
     GROUP BY d.cpv_division
@@ -193,10 +214,10 @@ run_query("Q9 ** Top 10 CPV divisions by tender volume", f"""
 
 run_query("Q10: Procedure type distribution", f"""
     SELECT
-        p.procedure_name AS verfahrensart,
+        p.procedure_name AS procedure_type,
         COUNT(*) AS tenders,
         ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 1) AS pct_total,
-        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS "f1_rate_%"
+        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS f1_rate_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_procedure_type p ON f.procedure_key = p.procedure_key
     GROUP BY p.procedure_name
@@ -205,12 +226,12 @@ run_query("Q10: Procedure type distribution", f"""
 
 run_query("Q11: Award value distribution (EUR)", f"""
     SELECT
-        MIN(award_value_eur)       AS "min_EUR",
-        ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY award_value_eur), 0) AS "q25",
-        ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY award_value_eur), 0) AS "median",
-        ROUND(AVG(award_value_eur), 0) AS "avg",
-        ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY award_value_eur), 0) AS "q95",
-        MAX(award_value_eur)       AS "max_EUR",
+        MIN(award_value_eur)       AS min_eur,
+        ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY award_value_eur), 0) AS q25,
+        ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY award_value_eur), 0) AS median,
+        ROUND(AVG(award_value_eur), 0) AS avg,
+        ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY award_value_eur), 0) AS q95,
+        MAX(award_value_eur)       AS max_eur,
         COUNT(*) AS n
     FROM {S}.fact_tender
     WHERE award_value_eur IS NOT NULL
@@ -220,7 +241,7 @@ run_query("Q12: Number of offers distribution", f"""
     SELECT
         number_offers,
         COUNT(*) AS tenders,
-        ROUND(100.0 * AVG(CASE WHEN F1 THEN 1 ELSE 0 END), 1) AS "f1_rate_%"
+        ROUND(100.0 * AVG(CASE WHEN F1 THEN 1 ELSE 0 END), 1) AS f1_rate_pct
     FROM {S}.fact_tender
     WHERE number_offers IS NOT NULL
     GROUP BY number_offers
@@ -229,9 +250,9 @@ run_query("Q12: Number of offers distribution", f"""
 
 run_query("Q13: Tenders by winner country (cross-border check)", f"""
     SELECT
-        w.country_name AS gewinner_land,
+        w.country_name AS winner_country,
         COUNT(*) AS tenders,
-        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS "f1_rate_%"
+        ROUND(100.0 * AVG(CASE WHEN f.F1 THEN 1 ELSE 0 END), 1) AS f1_rate_pct
     FROM {S}.fact_tender f
     JOIN {S}.dim_country w ON f.winner_country_key = w.country_key
     GROUP BY w.country_name
@@ -240,7 +261,7 @@ run_query("Q13: Tenders by winner country (cross-border check)", f"""
 
 run_query("Q14: NULL rates on key columns", f"""
     SELECT
-        'country_key'       AS spalte, ROUND(100.0 * COUNT(*) / MAX((SELECT COUNT(*) FROM {S}.fact_tender)), 1) AS pct_null FROM {S}.fact_tender WHERE country_key IS NULL
+        'country_key'       AS column_name, ROUND(100.0 * COUNT(*) / MAX((SELECT COUNT(*) FROM {S}.fact_tender)), 1) AS pct_null FROM {S}.fact_tender WHERE country_key IS NULL
     UNION ALL
     SELECT 'winner_country_key',ROUND(100.0 * COUNT(*) / MAX((SELECT COUNT(*) FROM {S}.fact_tender)), 1) FROM {S}.fact_tender WHERE winner_country_key IS NULL
     UNION ALL

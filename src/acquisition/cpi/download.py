@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 CPI_URL = (
     "https://data.humdata.org/dataset/"
     "fb4adde0-93d5-4ff9-befc-4a6916c1181b/resource/"
-    "a6a4e225-50bb-4abf-958c-c37e3c3b380b/download/global-cpi-all.csv"
+    "2019bc34-2771-40ce-870f-7a92cc1176a0/download/global_cpi_all.csv"
 )
 # Project root, resolved from this module (src/data_aquisition/cpi/download.py):
 #   4 × .parent → project root
@@ -67,7 +67,7 @@ def download_cpi(force: bool = False) -> bool:
     dest = dest_dir / CPI_FILENAME
 
     if dest.exists() and not force:
-        logger.info("CPI already exists – skipped (%s)", dest)
+        logger.info("CPI already exists -- skipped (%s)", dest)
         return True
 
     session = _create_session()
@@ -82,5 +82,5 @@ def download_cpi(force: bool = False) -> bool:
 
     dest.write_bytes(resp.content)
     size_mb = dest.stat().st_size / (1024 * 1024)
-    logger.info("CPI saved – %.2f MB → %s", size_mb, dest)
+    logger.info("CPI saved -- %.2f MB -> %s", size_mb, dest)
     return True

@@ -209,7 +209,7 @@ def log_pipeline_step(
     pct = 100.0 * abs(delta) / before if before else 0.0
     direction = "removed" if delta < 0 else "added" if delta > 0 else "unchanged"
     logger.info(
-        "%-30s %d → %d  (%s %d, %.1f%%)",
+        "%-30s %d -> %d  (%s %d, %.1f%%)",
         step_name,
         before,
         after,

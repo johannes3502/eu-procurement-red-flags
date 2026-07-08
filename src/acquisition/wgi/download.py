@@ -99,7 +99,7 @@ def download_wgi(
     dest = dest_dir / WGI_FILENAME
 
     if dest.exists() and not force:
-        logger.info("WGI already exists – skipped (%s)", dest)
+        logger.info("WGI already exists -- skipped (%s)", dest)
         return True
 
     logger.info(
@@ -158,7 +158,7 @@ def download_wgi(
     df_wide.to_csv(dest, index=False, encoding="utf-8")
     size_mb = dest.stat().st_size / (1024 * 1024)
     logger.info(
-        "WGI saved – %.2f MB, %d rows → %s",
+        "WGI saved -- %.2f MB, %d rows -> %s",
         size_mb, len(df_wide), dest,
     )
     return True

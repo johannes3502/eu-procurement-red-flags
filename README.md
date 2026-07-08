@@ -1,6 +1,6 @@
 # Red Flags in EU Procurement & Governance Quality
 
-> **1.78M public tenders · 4 countries · 10 years · 6 red flags · Star Schema · Power BI**
+> **1.78M public tenders · 4 countries · 10 years · 6 red flags · Star Schema · Power BI (PDF)**
 >
 > A data warehouse project correlating procurement anomalies with governance quality indicators (CPI, WGI).
 
@@ -71,6 +71,22 @@ venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 ```
 
+### Exasol Setup (via Docker)
+
+If you don't have an Exasol instance, run one locally:
+```bash
+docker run -d --name exasol-db -p 8563:8563 --privileged exasol/docker-db:latest
+```
+Wait ~90 seconds for startup, then use these credentials:
+```ini
+EXASOL_HOST=localhost
+EXASOL_PORT=8563
+EXASOL_USER=sys
+EXASOL_PASSWORD=exasol
+```
+
+**DBeaver connection:** Create new Exasol connection → Host: `localhost`, Port: `8563`, User: `sys`, Password: `exasol`. Disable SSL certificate validation in Driver Properties (set `sslcertificate=0`).
+
 ### Configuration
 
 ```bash
@@ -88,27 +104,28 @@ EXASOL_SCHEMA=procurement_governance
 
 ### Data Pipeline
 
+**One-command pipeline** (runs all steps: download → cleanup → Exasol load → tests):
+```bash
+python run_all.py
+```
+
+Options:
+```bash
+python run_all.py --years 2022 2023   # test with fewer years
+python run_all.py --skip-download     # skip download, use existing data
+python run_all.py --skip-tests        # skip pytest
+```
+
+**Individual steps:**
 ```bash
 python src/download_data.py              # downloads TED/CPI/WGI raw data
 python -m src.processing.run_cleanup     # cleans data + computes red flags → Parquet
 python -m src.dw.setup_and_load          # creates star schema + loads into Exasol
 ```
 
-After loading, run analytical SQL queries:
+After loading, run analytical queries against Exasol:
 ```bash
-# In DBeaver, connect to your Exasol instance and run the scripts in order:
-#   src/dw/ddl/create_staging_tables.sql
-#   src/dw/ddl/import_staging.sql
-#   src/dw/ddl/create_star_schema.sql
-#   src/dw/ddl/merge_dimensions.sql
-#   src/dw/ddl/data_quality_checks.sql
-#   src/dw/ddl/analytical_queries.sql
-```
-
-### Test Connection
-
-```bash
-python src/powerbi/test_connections.py   # tests ODBC + native Exasol connections
+python src/powerbi/exploratory_analysis.py   # runs 10 analytical queries against Exasol
 ```
 
 ### Run Tests
@@ -145,6 +162,7 @@ python -m pytest tests/ -v               # runs 51 unit tests
 ```
 eu-procurement-red-flags/
 ├── README.md
+├── run_all.py                      # single-entry pipeline script
 ├── requirements.txt
 ├── .env.template                  # connection config (copy to .env, NEVER commit .env)
 ├── .gitignore
@@ -184,12 +202,11 @@ eu-procurement-red-flags/
 │   │       ├── merge_dimensions.sql
 │   │       ├── data_quality_checks.sql
 │   │       └── analytical_queries.sql
-│   ├── powerbi/                   # Power BI artifacts
+│   ├── powerbi/                   # Exasol analysis + Power BI PDF report
 │   │   ├── report.pdf             # final report (3 pages)
-│   │   ├── measures.dax           # DAX measures
-│   │   ├── setup-guide.md         # Power BI setup instructions
-│   │   ├── exploratory_analysis.py # pre-visualization data checks
-│   │   └── test_connections.py    # connection diagnostics
+│   │   ├── exploratory_analysis.py # analytical queries against Exasol
+│   │   ├── test_connections.py    # ODBC + native Exasol connection tests
+│   │   └── setup-guide.md         # Exasol connection setup guide
 │   └── log/                       # logging utilities
 │
 ├── tests/                          # test suite (pytest)

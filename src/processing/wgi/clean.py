@@ -49,6 +49,6 @@ def clean_wgi(df: pd.DataFrame, target_alpha3: Optional[Set[str]] = None) -> pd.
     expected = 40  # 4 countries × 10 years
     if after != expected:
         logger.warning("clean_wgi: expected %d rows after filter, got %d", expected, after)
-    logger.info("clean_wgi: %d → %d rows (%.1f%% kept)", before, after,
+    logger.info("clean_wgi: %d -> %d rows (%.1f%% kept)", before, after,
                 100.0 * after / before if before else 0.0)
     return df

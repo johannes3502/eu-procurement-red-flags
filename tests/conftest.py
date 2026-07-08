@@ -1,4 +1,4 @@
-"""Shared test fixtures for the red-flags-procurement-governance test suite."""
+"""Shared test fixtures for the eu-procurement-red-flags test suite."""
 
 import sys
 from pathlib import Path

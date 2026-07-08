@@ -376,7 +376,7 @@ def main() -> None:
     )
 
     logger.info("=" * 60)
-    logger.info("Data Profiling gestartet")
+    logger.info("Data Profiling started")
     logger.info("=" * 60)
 
     # -- Directories ------------------------------------------------------
@@ -385,23 +385,23 @@ def main() -> None:
     output_dir = project_root / "doc" / "profiling"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Projekt-Root: %s", project_root)
-    logger.info("Daten-Verzeichnis: %s", data_dir)
-    logger.info("Ausgabe-Verzeichnis: %s", output_dir)
+    logger.info("Project root: %s", project_root)
+    logger.info("Data directory: %s", data_dir)
+    logger.info("Output directory: %s", output_dir)
 
     # -- Scan files -------------------------------------------------------
     files = scan_raw_files(data_dir)
-    logger.info("Gefundene CSV-Dateien: %d", len(files))
+    logger.info("CSV files found: %d", len(files))
 
     if not files:
-        logger.warning("Keine CSV-Dateien in %s gefunden!", data_dir)
+        logger.warning("No CSV files found in %s!", data_dir)
         return
 
     # -- Process each file ------------------------------------------------
     for source_type, file_path, label in files:
         logger.info("=" * 50)
-        logger.info("Verarbeite %s ...", label)
-        logger.info("Datei: %s", file_path)
+        logger.info("Processing %s ...", label)
+        logger.info("File: %s", file_path)
 
         try:
             file_size_mb = file_path.stat().st_size / 1_000_000
@@ -415,7 +415,7 @@ def main() -> None:
                 dtype_backend="numpy_nullable",
             )
             logger.info(
-                "%s: %d Zeilen, %d Spalten geladen (%.2f MB)",
+                "%s: %d rows, %d columns loaded (%.2f MB)",
                 label, len(df), len(df.columns), file_size_mb,
             )
 
@@ -428,7 +428,7 @@ def main() -> None:
                 year = int(file_path.stem.replace("ted_", ""))
                 metrics = profile_ted(df, year, logger)
             else:
-                logger.warning("Unbekannter Quelltyp: %s – überspringe", source_type)
+                logger.warning("Unknown source type: %s -- skipping", source_type)
                 continue
 
             # Overwrite basic_info with actual values (including file size)
@@ -449,13 +449,13 @@ def main() -> None:
 
             # Write report
             out_path.write_text(md_content, encoding="utf-8")
-            logger.info("Report geschrieben: %s", out_path)
+            logger.info("Report written: %s", out_path)
 
         except Exception:
-            logger.exception("Fehler bei der Verarbeitung von %s", label)
+            logger.exception("Error processing %s", label)
 
     logger.info("=" * 60)
-    logger.info("Data Profiling abgeschlossen – Reports in %s", output_dir)
+    logger.info("Data Profiling complete -- reports in %s", output_dir)
     logger.info("=" * 60)
 
 

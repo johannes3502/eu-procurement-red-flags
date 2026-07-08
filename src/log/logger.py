@@ -8,16 +8,25 @@ def setup_logger(
     log_dir: str = "src/logs",
     log_file: str = "app.log",
     max_bytes: int = 20 * 1024 * 1024,   # 20 MB
-    backup_count: int = 2,               # max. 2 Dateien (app.log, app.log.1)
+    backup_count: int = 2,               # max. 2 files (app.log, app.log.1)
     console_level: int = logging.DEBUG,
     file_level: int = logging.DEBUG,
 ) -> logging.Logger:
     """
-    Richtet einen Logger mit Konsolen- und Dateiausgabe ein.
-    - Logrotation: max. 20 MB pro Datei, maximal 2 Dateien.
-    - Format: dateiname:funktion LEVEL nachricht
-    - Alle Parameter sind konfigurierbar.
+    Set up a logger with console and file output.
+    - Log rotation: max. 20 MB per file, max 2 files.
+    - Format: filename:funcName LEVEL message
+    - All parameters are configurable.
+
+    If RUN_ALL=1 is set in environment, returns a silent logger
+    (used by run_all.py orchestrator to avoid duplicate output).
     """
+    if os.environ.get("RUN_ALL") == "1":
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.WARNING)
+        logger.handlers.clear()
+        logger.propagate = True
+        return logger
     project_root = Path(__file__).resolve().parents[2]
     resolved_log_dir = Path(log_dir)
     if not resolved_log_dir.is_absolute():

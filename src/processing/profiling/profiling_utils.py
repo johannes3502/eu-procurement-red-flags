@@ -386,8 +386,8 @@ def generate_markdown(
     # === HEADER ==========================================================
     lines.append(f"# Profiling Report: {source_name}")
     lines.append("")
-    lines.append(f"**Datei:** `{file_path}`  ")
-    lines.append(f"**Erstellt:** {timestamp}  ")
+    lines.append(f"**File:** `{file_path}`  ")
+    lines.append(f"**Created:** {timestamp}  ")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -397,19 +397,19 @@ def generate_markdown(
     # === 1. BASIC INFORMATION ============================================
     lines.append("## 1. Basic Information")
     lines.append("")
-    lines.append("| Metrik | Wert |")
-    lines.append("|--------|------|")
-    _append_row(lines, "Zeilen", f"{bi.get('rows', 0):,}")
-    _append_row(lines, "Spalten", str(bi.get("columns", 0)))
-    _append_row(lines, "Speicher (RAM)", f"{bi.get('memory_mb', 0):.2f} MB")
-    _append_row(lines, "Dateigrösse", f"{bi.get('file_size_mb', 0):.2f} MB")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
+    _append_row(lines, "Rows", f"{bi.get('rows', 0):,}")
+    _append_row(lines, "Columns", str(bi.get("columns", 0)))
+    _append_row(lines, "Memory (RAM)", f"{bi.get('memory_mb', 0):.2f} MB")
+    _append_row(lines, "File size", f"{bi.get('file_size_mb', 0):.2f} MB")
     lines.append("")
 
     # === 2. DATATYPES ====================================================
-    lines.append("## 2. Datentypen")
+    lines.append("## 2. Data Types")
     lines.append("")
-    lines.append("| Spalte | Typ | Einzigartige Werte | Beispielwerte |")
-    lines.append("|--------|-----|-------------------|---------------|")
+    lines.append("| Column | Type | Unique Values | Example Values |")
+    lines.append("|--------|------|---------------|----------------|")
     dtypes = metrics.get("dtypes", {})
     if dtypes:
         for col, info in dtypes.items():
@@ -423,44 +423,44 @@ def generate_markdown(
     lines.append("")
 
     # === 3. MISSING VALUES ===============================================
-    lines.append("## 3. Fehlende Werte")
+    lines.append("## 3. Missing Values")
     lines.append("")
     mv = metrics.get("missing_values", {})
-    lines.append(f"- **Gesamtzellen:** {mv.get('total_cells', 0):,}")
-    lines.append(f"- **Fehlende Zellen:** {mv.get('total_missing', 0):,}")
-    lines.append(f"- **Fehlwerten-Rate:** {mv.get('pct_missing', 0):.2f}%")
+    lines.append(f"- **Total cells:** {mv.get('total_cells', 0):,}")
+    lines.append(f"- **Missing cells:** {mv.get('total_missing', 0):,}")
+    lines.append(f"- **Missing rate:** {mv.get('pct_missing', 0):.2f}%")
     lines.append("")
     per_col = mv.get("per_column", {})
     if per_col:
-        lines.append("| Spalte | Fehlend | Anteil |")
-        lines.append("|--------|---------|--------|")
+        lines.append("| Column | Missing | Rate |")
+        lines.append("|--------|---------|------|")
         for col, info in sorted(per_col.items(), key=lambda x: x[1]["missing"], reverse=True):
             lines.append(f"| {col} | {info['missing']:,} | {info['pct']:.2f}% |")
     lines.append("")
 
     # === 4. DUPLICATES ===================================================
-    lines.append("## 4. Duplikate")
+    lines.append("## 4. Duplicates")
     lines.append("")
     dup = metrics.get("duplicates", {})
     if "error" in dup:
-        lines.append(f"⚠️ {dup['error']}")
+        lines.append(f"WARN: {dup['error']}")
     else:
         key_str = ", ".join(dup.get("key_columns", []))
-        lines.append(f"- **Prüfschlüssel:** `{key_str}`")
+        lines.append(f"- **Key columns:** `{key_str}`")
         lines.append(
-            f"- **Duplikate:** {dup.get('duplicate_rows', 0):,} "
+            f"- **Duplicates:** {dup.get('duplicate_rows', 0):,} "
             f"({dup.get('pct_duplicates', 0):.4f}%)"
         )
     lines.append("")
 
     # === 5. OUTLIERS (IQR) ===============================================
-    lines.append("## 5. Ausreisser (IQR)")
+    lines.append("## 5. Outliers (IQR)")
     lines.append("")
     ol = metrics.get("outliers", {}).get("per_column", {})
     if ol:
         lines.append(
-            "| Spalte | #Ausreisser | Anteil | Untergrenze | Obergrenze | "
-            "Min (Ist) | Max (Ist) | 99% Clip |"
+            "| Column | #Outliers | Rate | Lower Bound | Upper Bound | "
+            "Min (actual) | Max (actual) | 99% Clip |"
         )
         lines.append(
             "|--------|------------|--------|-------------|-------------|"
@@ -477,20 +477,20 @@ def generate_markdown(
                 f"{_fmt_val(info.get('suggested_clip_99pct'))} |"
             )
     else:
-        lines.append("Keine numerischen Spalten für Ausreisser-Analyse.")
+        lines.append("No numeric columns for outlier analysis.")
     lines.append("")
 
     # === 6. VALUE RANGES =================================================
-    lines.append("## 6. Wertebereiche & Verteilungen")
+    lines.append("## 6. Value Ranges & Distributions")
     lines.append("")
     vr = metrics.get("value_ranges", {})
     num = vr.get("numerical", {})
     cat = vr.get("categorical", {})
 
     if num:
-        lines.append("### Numerische Spalten")
+        lines.append("### Numeric Columns")
         lines.append("")
-        lines.append("| Spalte | Min | Max | Mean | Median | Std | Negative |")
+        lines.append("| Column | Min | Max | Mean | Median | Std | Negative |")
         lines.append("|--------|-----|-----|------|--------|-----|----------|")
         for col, info in num.items():
             lines.append(
@@ -501,13 +501,13 @@ def generate_markdown(
 
     if cat:
         lines.append("")
-        lines.append("### Kategoriale Spalten (Top 10)")
+        lines.append("### Categorical Columns (Top 10)")
         lines.append("")
         for col, info in cat.items():
             lines.append(f"**{col}** ({info['unique_values']} unique)")
             lines.append("")
-            lines.append("| Wert | Count | Anteil |")
-            lines.append("|------|-------|--------|")
+            lines.append("| Value | Count | Rate |")
+            lines.append("|-------|-------|------|")
             for top in info.get("top_values", []):
                 lines.append(
                     f"| {top['value'][:45]} | {top['count']:,} | "
@@ -517,13 +517,13 @@ def generate_markdown(
     lines.append("")
 
     # === 7. TEXT QUALITY =================================================
-    lines.append("## 7. Textqualität")
+    lines.append("## 7. Text Quality")
     lines.append("")
     tq = metrics.get("text_quality", {}).get("per_column", {})
     if tq:
         lines.append(
-            "| Spalte | Leerstrings | Whitespace | Null-Strings | "
-            "Ø Länge | Min | Max |"
+            "| Column | Empty Strings | Whitespace | Null-Strings | "
+            "Avg Length | Min | Max |"
         )
         lines.append(
             "|--------|------------|------------|-------------|"
@@ -538,11 +538,11 @@ def generate_markdown(
                 f"{info['min_length']} | {info['max_length']} |"
             )
     else:
-        lines.append("Keine Text-Spalten analysiert.")
+        lines.append("No text columns analyzed.")
     lines.append("")
 
     # === 8. LOGICAL CONSISTENCY ==========================================
-    lines.append("## 8. Logische Konsistenz")
+    lines.append("## 8. Logical Consistency")
     lines.append("")
     lc = metrics.get("logical_consistency", {})
     rules = lc.get("rules_checked", [])

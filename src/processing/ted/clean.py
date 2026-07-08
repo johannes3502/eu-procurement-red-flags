@@ -45,7 +45,7 @@ def clean_ted_filter_countries(df: pd.DataFrame) -> pd.DataFrame:
     df = df[mask].copy()
     after = len(df)
     logger.info(
-        "clean_ted_filter_countries: %d → %d rows (%.1f%% kept)",
+        "clean_ted_filter_countries: %d -> %d rows (%.1f%% kept)",
         before,
         after,
         100.0 * after / before if before else 0.0,
@@ -80,7 +80,7 @@ def clean_ted_dedup(df: pd.DataFrame) -> pd.DataFrame:
 
     after = len(df)
     logger.info(
-        "clean_ted_dedup: %d → %d rows (%.1f%% removed)",
+        "clean_ted_dedup: %d -> %d rows (%.1f%% removed)",
         before,
         after,
         100.0 * (before - after) / before if before else 0.0,
@@ -185,9 +185,9 @@ def clean_ted_normalize_cpv(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize CPV codes to exactly 8 digits, rename to ``cpv_code``.
 
     Handles two sources of CPV representation in raw TED:
-    - ``int64`` years (most years): ``3110000`` → ``'03110000'``
+    - ``int64`` years (most years): ``3110000`` -> ``'03110000'``
     - ``float64`` years (2014, 2016, 2017 — NaN forces float dtype):
-      ``3110000.0`` → ``'3110000'`` → ``'03110000'``
+      ``3110000.0`` -> ``'3110000'`` -> ``'03110000'``
 
     Drops rows where CPV is NULL (cannot normalise).
 

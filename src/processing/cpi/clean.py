@@ -31,7 +31,7 @@ def clean_cpi(df: pd.DataFrame, target_alpha3: Optional[Set[str]] = None) -> pd.
         4. Keep only ``config.CPI_KEEP_COLUMNS``.
 
     Args:
-        df: Raw CPI DataFrame with ``iso3``, ``year``, ``score`` columns.
+        df: Raw CPI DataFrame with ```iso3```, ``year``, ```score``` columns.
         target_alpha3: Set of Alpha-3 codes to keep. Defaults to ``{"DEU", "DNK", "HUN", "ROU"}``.
 
     Returns:
@@ -46,6 +46,6 @@ def clean_cpi(df: pd.DataFrame, target_alpha3: Optional[Set[str]] = None) -> pd.
     df = df.rename(columns={"iso3": "country_iso3", "score": "cpi_score"})
     df = df[config.CPI_KEEP_COLUMNS]
     after = len(df)
-    logger.info("clean_cpi: %d → %d rows (%.1f%% kept)", before, after,
+    logger.info("clean_cpi: %d -> %d rows (%.1f%% kept)", before, after,
                 100.0 * after / before if before else 0.0)
     return df

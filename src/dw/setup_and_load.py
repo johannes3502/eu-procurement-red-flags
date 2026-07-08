@@ -4,16 +4,16 @@ setup_and_load.py — Complete Exasol setup and data load.
 One script to rule them all:
     1. Connect to Exasol (credentials from .env)
     2. Create all tables (staging + star schema)
-    3. Load cleaned parquet files (CPI, WGI, TED)
-    4. Insert example rows (2 per table)
-    5. Verify row counts and show sample join
-    6. Print final summary
+    3. Load cleaned parquet files (CPI, WGI, TED) into staging
+    4. Merge dimensions from staging → dim tables (SCD2)
+    5. Populate fact_tender from staging via dimension joins
+    6. Print final summary and row counts
 
 Usage:
-    python src/dw/setup_and_load.py                # Full pipeline
-    python src/dw/setup_and_load.py --ddl-only     # Only DDL
-    python src/dw/setup_and_load.py --load-only    # Only data load
-    python src/dw/setup_and_load.py --verify       # Only verification
+    python -m src.dw.setup_and_load              # Full pipeline
+    python -m src.dw.setup_and_load --ddl-only   # Only DDL
+    python -m src.dw.setup_and_load --load-only  # Only data load
+    python -m src.dw.setup_and_load --verify     # Only verification
 """
 
 import argparse
@@ -284,32 +284,25 @@ def load_parquet_files(conn):
 
 
 # ============================================================================
-# Phase 3: Example rows
+# Phase 3: Merge dimensions + populate fact table from staging
 # ============================================================================
 
-def insert_example_rows(conn):
-    """Insert 2 example rows per table (clean + insert)."""
+def merge_dimensions(conn):
     ddl_dir = Path(__file__).resolve().parent / "ddl"
+    merge_file = ddl_dir / "merge_dimensions.sql"
 
     logger.info("=" * 60)
-    logger.info("PHASE 3: Inserting example rows")
+    logger.info("PHASE 3: Merging dimensions + populating fact table")
     logger.info("=" * 60)
 
-    # Clean in reverse FK order: facts first, then dims
-    for table in ["fact_tender", "dim_procedure_type", "dim_cpv", "dim_country"]:
-        conn.execute(f"DELETE FROM {table}")
-    conn.commit()
-    logger.info("Cleaned dimension + fact tables")
-
-    insert_file = ddl_dir / "insert_example_rows.sql"
-    logger.info("Executing %s...", insert_file.name)
-    if not execute_sql_file(conn, insert_file):
-        logger.error("Example INSERTs failed")
+    logger.info("Executing %s...", merge_file.name)
+    if not execute_sql_file(conn, merge_file):
+        logger.error("Merge dimensions failed")
         return False
 
     for table in ["dim_country", "dim_cpv", "dim_procedure_type", "fact_tender"]:
         count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        logger.info("  %s: %s rows", table, f"{count}")
+        logger.info("  %s: %s rows", table, f"{count:,}")
 
     return True
 
@@ -426,8 +419,8 @@ def main():
     if do_load and phase_ok:
         phase_ok = load_parquet_files(conn)
     if (do_ddl or do_load) and phase_ok:
-        if not insert_example_rows(conn):
-            logger.warning("Example INSERTs had issues")
+        if not merge_dimensions(conn):
+            logger.warning("Merge dimensions had issues")
     if do_verify:
         verify_and_report(conn)
 

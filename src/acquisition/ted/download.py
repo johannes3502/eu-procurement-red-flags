@@ -80,7 +80,7 @@ def _download_and_extract_zip(
     dest = dest_dir / f"ted_{year}.csv"
 
     if dest.exists() and not force:
-        logger.info("TED %d already exists – skipped", year)
+        logger.info("TED %d already exists -- skipped", year)
         return True
 
     # Download ZIP
@@ -93,7 +93,7 @@ def _download_and_extract_zip(
         return False
 
     size_mb = len(resp.content) / (1024 * 1024)
-    logger.info("TED %d ZIP downloaded – %.2f MB", year, size_mb)
+    logger.info("TED %d ZIP downloaded -- %.2f MB", year, size_mb)
 
     # Extract CSV from ZIP
     try:
@@ -104,7 +104,7 @@ def _download_and_extract_zip(
                 return False
             if len(csv_names) > 1:
                 logger.info(
-                    "TED %d ZIP contains %d CSVs – using first: %s",
+                    "TED %d ZIP contains %d CSVs -- using first: %s",
                     year, len(csv_names), csv_names[0],
                 )
             csv_content = zf.read(csv_names[0])
@@ -114,7 +114,7 @@ def _download_and_extract_zip(
 
     dest.write_bytes(csv_content)
     saved_mb = dest.stat().st_size / (1024 * 1024)
-    logger.info("TED %d saved – %.2f MB → %s", year, saved_mb, dest)
+    logger.info("TED %d saved -- %.2f MB -> %s", year, saved_mb, dest)
     return True
 
 
@@ -148,7 +148,7 @@ def download_ted(
     for year in years:
         url = TED_URLS.get(year)
         if url is None:
-            logger.debug("TED %d has no configured URL – skipping", year)
+            logger.debug("TED %d has no configured URL -- skipping", year)
             continue
 
         ok = _download_and_extract_zip(session, year, url, dest_dir, force)

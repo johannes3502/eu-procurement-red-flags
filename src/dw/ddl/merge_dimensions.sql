@@ -68,10 +68,10 @@ INSERT INTO fact_tender (award_id, id_notice_can, id_lot, "year", crisis_type, c
 SELECT
     t.ID_AWARD, t.ID_NOTICE_CAN, t.ID_LOT, t."YEAR",
     CASE
-        WHEN t."YEAR" BETWEEN 2014 AND 2019 THEN 'keine Krise'
+        WHEN t."YEAR" BETWEEN 2014 AND 2019 THEN 'pre-crisis'
         WHEN t."YEAR" BETWEEN 2020 AND 2021 THEN 'COVID-19'
-        WHEN t."YEAR" BETWEEN 2022 AND 2023 THEN 'Ukraine-Krieg'
-        ELSE 'keine Krise'
+        WHEN t."YEAR" BETWEEN 2022 AND 2023 THEN 'Ukraine War'
+        ELSE 'pre-crisis'
     END,
     c_authority.country_key, c_winner.country_key,
     cpv.cpv_key, proc.procedure_key,
